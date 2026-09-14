@@ -1,0 +1,24 @@
+# Secrets
+.env
+*.token.json
+client_secret*.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime data (large / generated)
+data/
+output/
+cache/
+work/
+logs/
+
+# User-owned media (never versioned)
+assets/visuals/*
+!assets/visuals/.gitkeep
+!assets/visuals/visuals.example.yaml
+assets/audio_own/*
+!assets/audio_own/.gitkeep
