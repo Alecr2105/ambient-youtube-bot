@@ -150,6 +150,7 @@ class Master(Strict):
 class Recipe(Strict):
     slug: str = Field(pattern=r"^[a-z0-9_]+$")
     name: str
+    name_es: str | None = Field(None, description="only used for the optional 'es' localization, never in main fields")
     enabled: bool = True
     subniches: list[Literal["sleep", "study", "relaxation"]]
     keywords: list[str]

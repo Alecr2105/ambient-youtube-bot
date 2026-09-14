@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Resumen</h1>
+<div class="actions">
+  {% if paused %}
+    <span class="warn">Automatización en pausa</span>
+    <form class="inline" method="post" action="/commands/resume"><button>Reanudar</button></form>
+  {% else %}
+    <span class="ok">Automatización activa</span>
+    <form class="inline" method="post" action="/commands/pause"><button class="secondary">Pausar</button></form>
+  {% endif %}
+  <form class="inline" method="post" action="/commands/produce_now">
+    <input name="recipe" placeholder="receta (opcional)" size="18">
+    <input name="date" placeholder="AAAA-MM-DD (opcional)" size="14">
+    <button>Producir ahora</button>
+  </form>
+</div>
+<p class="muted">Las órdenes las ejecuta el worker (<code>run-scheduler</code>) en menos de un minuto.</p>
+
+<h2>Estado</h2>
+<div class="grid">
+  {% for state in ["PLANNED","RENDERING","QUALITY_CHECK","READY","SCHEDULED","PUBLISHED","FAILED"] %}
+  <div class="card"><div class="n {% if state == 'FAILED' and counts[state] %}bad{% endif %}">{{ counts[state] }}</div><div class="l">{{ state }}</div></div>
+  {% endfor %}
+  <div class="card"><div class="n">{{ visuals }}</div><div class="l">clips indexados</div></div>
+  <div class="card"><div class="n">{{ "%.0f"|format(disk_gb) }} GB</div><div class="l">disco libre</div></div>
+</div>
+
+<h2>Cuota de YouTube hoy</h2>
+<div class="grid">
+  {% for bucket, (used, limit) in quota.items() %}
+  <div class="card"><div class="n">{{ used }} / {{ limit }}</div><div class="l">{{ bucket }}</div></div>
+  {% endfor %}
+  <div class="card"><div class="n">${{ "%.2f"|format(spend[0]) }} / {{ "%.2f"|format(spend[1]) }}</div><div class="l">gasto hoy</div></div>
+  <div class="card"><div class="n">${{ "%.2f"|format(spend[2]) }} / {{ "%.2f"|format(spend[3]) }}</div><div class="l">gasto del mes</div></div>
+</div>
+
+<h2>Próximos videos</h2>
+<div class="scroll"><table>
+  <tr><th>Video</th><th>Estado</th><th>Publicación</th><th></th></tr>
+  {% for v in upcoming %}
+  <tr>
+    <td><a href="/videos/{{ v.id }}">{{ v.id }}</a></td>
+    <td class="{% if v.state.value == 'FAILED' %}bad{% elif v.state.value in ('READY','SCHEDULED') %}ok{% endif %}">{{ v.state.value }}{% if v.failed_from_state %} <span class="muted">(en {{ v.failed_from_state.value }})</span>{% endif %}</td>
+    <td>{{ v.target_publish_date }}</td>
+    <td>{% if v.state.value == 'FAILED' %}<form class="inline" method="post" action="/commands/resume_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button class="secondary">Reintentar</button></form>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">Sin videos todavía.</td></tr>{% endfor %}
+</table></div>
+
+<h2>Errores recientes</h2>
+<div class="scroll"><table>
+  <tr><th>Cuándo</th><th>Video</th><th>Etapa</th><th>Error</th></tr>
+  {% for e in errors %}
+  <tr><td>{{ e.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ e.video_id or "" }}</td><td>{{ e.stage }}</td><td><code>{{ e.error_type }}</code> {{ e.message[:180] }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">Sin errores.</td></tr>{% endfor %}
+</table></div>
+
+<h2>Órdenes</h2>
+<div class="scroll"><table>
+  <tr><th>#</th><th>Orden</th><th>Estado</th><th>Resultado</th></tr>
+  {% for c in commands %}<tr><td>{{ c.id }}</td><td>{{ c.name }}</td><td>{{ c.status }}</td><td>{{ c.result or "" }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">Sin órdenes.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

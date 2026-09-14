@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Configuración · Ambient Bot{% endblock %}
+{% block content %}
+<h1>Configuración</h1>
+{% if saved %}<p class="ok">Guardado en <code>.env</code>. Reiniciá el worker (<code>run-scheduler</code>) para aplicar los cambios.</p>{% endif %}
+<p class="muted">Solo se editan duración y horarios. Credenciales, modo y presupuesto se cambian a mano en <code>.env</code>, a propósito.</p>
+<form method="post" action="/settings">
+<div class="scroll"><table>
+  <tr><th>Variable</th><th>Valor</th><th>Qué hace</th></tr>
+  <tr><td>VIDEO_DURATION_MIN</td><td><input name="VIDEO_DURATION_MIN" value="{{ values.VIDEO_DURATION_MIN }}" size="5"></td><td>Duración mínima en minutos</td></tr>
+  <tr><td>VIDEO_DURATION_MAX</td><td><input name="VIDEO_DURATION_MAX" value="{{ values.VIDEO_DURATION_MAX }}" size="5"></td><td>Duración máxima en minutos</td></tr>
+  <tr><td>VIDEO_DURATION</td><td><input name="VIDEO_DURATION" value="{{ values.VIDEO_DURATION }}" size="5"></td><td>Si tiene valor, fuerza esa duración exacta</td></tr>
+  <tr><td>PUBLISH_HOUR</td><td><input name="PUBLISH_HOUR" value="{{ values.PUBLISH_HOUR }}" size="3"></td><td>Hora de publicación (hora del Este de EE. UU.)</td></tr>
+  <tr><td>PUBLISH_WINDOW_MINUTES</td><td><input name="PUBLISH_WINDOW_MINUTES" value="{{ values.PUBLISH_WINDOW_MINUTES }}" size="4"></td><td>Minutos de variación aleatoria después de esa hora</td></tr>
+  <tr><td>CREATE_HOUR</td><td><input name="CREATE_HOUR" value="{{ values.CREATE_HOUR }}" size="3"></td><td>Hora local (Costa Rica) en que arranca la producción diaria</td></tr>
+  <tr><td>ACTIVE_WEEKDAYS</td><td><input name="ACTIVE_WEEKDAYS" value="{{ values.ACTIVE_WEEKDAYS }}" size="30"></td><td>Días activos: mon,tue,wed,thu,fri,sat,sun</td></tr>
+  <tr><td>BUFFER_DAYS</td><td><input name="BUFFER_DAYS" value="{{ values.BUFFER_DAYS }}" size="3"></td><td>Días de adelanto con videos listos</td></tr>
+</table></div>
+<p><button>Guardar</button></p>
+</form>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sonidos · Ambient Bot{% endblock %}
+{% block content %}
+<h1>Sonidos y licencias</h1>
+<h2>Uso de APIs externas</h2>
+<div class="scroll"><table>
+  <tr><th>Proveedor</th><th>Llamadas</th><th>Costo</th></tr>
+  {% for provider, calls, cost in costs %}<tr><td>{{ provider }}</td><td>{{ calls }}</td><td>${{ "%.2f"|format(cost or 0) }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">Sin llamadas externas.</td></tr>{% endfor %}
+</table></div>
+<h2>Catálogo ({{ sounds|length }})</h2>
+<div class="scroll"><table>
+  <tr><th>#</th><th>Categoría</th><th>Nombre</th><th>Proveedor</th><th>Licencia</th><th>Autor / origen</th><th>Procedencia</th></tr>
+  {% for s, l in sounds %}
+  <tr class="{{ 'muted' if l.blacklisted else '' }}">
+    <td>{{ s.id }}</td><td>{{ s.category }}</td><td>{{ s.name }}</td><td>{{ s.provider }}</td>
+    <td>{{ l.license_type.value }}{% if l.blacklisted %} <span class="bad">bloqueado: {{ l.blacklist_reason }}</span>{% endif %}</td>
+    <td>{% if l.source_url %}<a href="{{ l.source_url }}">{{ l.author }}</a>{% else %}{{ l.author or "" }}{% endif %}</td>
+    <td class="muted">{{ l.provenance_notes or "" }}</td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="muted">El catálogo está vacío: por ahora todo el audio es procedural.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

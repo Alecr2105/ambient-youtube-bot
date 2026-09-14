@@ -216,6 +216,8 @@ video_sounds  (video_id, sound_id, layer, seconds_used)   # uso real por video
 ### 9.1 Estimaciones en tu máquina (Ryzen 7 8845HS, 16 hilos · RTX 4060 · 31 GB RAM)
 
 > **Medido 2026-09-13 (fase 1)**: `heavy_rain_window`, 240 min, 2 capas procedurales, un solo hilo → mezcla 16,1 min · master 5,9 min (un intento, −18,00 LUFS) · quality check de audio 2,5 min · **total 24,5 min**. `audio.flac` = 2,8 GB. Mejor que la estimación de abajo; el cuello de botella real será el video.
+>
+> **Medido 2026-09-13 (fase 3)**: video de 240 min desde un clip de 20 min (1080p30, NVENC, 6 variantes × 10 min) → segmentos 19,6 min · transiciones 9 s · ensamblado + AAC 4,1 min · **render 24 min** · quality check de video 5,5 min. `video.mp4` = 8,9 GB. **Video completo de 4 h (audio + video + controles) ≈ 55 min.**
 Son **estimaciones de orden de magnitud** que se miden de verdad al cerrar las fases 1 y 3, y se registran en DB por etapa.
 
 | Etapa (video de 4 h, audio 48 kHz estéreo) | CPU | Con GPU (NVENC) |

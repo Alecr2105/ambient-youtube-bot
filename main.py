@@ -173,12 +173,144 @@ def cmd_youtube_test_upload(args: argparse.Namespace) -> int:
     return 0 if result["privacy_status"] == "private" else 1
 
 
-def not_yet(phase: int):
-    def handler(args: argparse.Namespace) -> int:
-        log.error("command '%s' is implemented in phase %d", args.command, phase)
-        return 2
+def cmd_index_visuals(_args: argparse.Namespace) -> int:
+    from app.database.session import session_scope
+    from app.utils import ffmpeg
+    from app.visuals.indexer import index_visuals
 
-    return handler
+    settings = get_settings()
+    ffprobe = ffmpeg.require_binary("ffprobe", settings.ffprobe_path)
+    with session_scope(_engine()) as session:
+        report = index_visuals(session, settings.visuals_dir, ffprobe)
+    print(f"added: {len(report.added)}  updated: {len(report.updated)}  missing: {len(report.missing)}  skipped: {len(report.skipped)}")
+    for name, reason in report.skipped.items():
+        print(f"  skipped {name}: {reason}")
+    return 0
+
+
+def cmd_produce_video(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from app.video.produce import produce_video
+    from app.visuals.matcher import NoMatchingVisualsError
+
+    try:
+        _out, report = produce_video(get_settings(), args.recipe, Path(args.audio), args.seed, args.segment_minutes * 60, args.variants)
+    except NoMatchingVisualsError as exc:
+        log.error("%s; add footage to assets/visuals and run `python main.py index-visuals`", exc)
+        return 1
+    return 0 if report.passed else 1
+
+
+def cmd_metadata_preview(args: argparse.Namespace) -> int:
+    import secrets
+
+    from app.audio.recipe import load_recipe
+    from app.metadata.preview import preview_metadata
+
+    package = preview_metadata(load_recipe(args.recipe), args.minutes, get_settings(), args.seed or secrets.randbits(32), not args.no_research)
+    print(f"TITLE: {package.title}\n")
+    print("TOP CANDIDATES:")
+    for c in package.title_candidates[:5]:
+        print(f"  {c['score']:6.2f}  {c['text']}")
+    print(f"\nDESCRIPTION:\n{package.description}\n")
+    print(f"TAGS ({len(package.tags)}): {', '.join(package.tags)}\n")
+    print("RESEARCH:", ", ".join(f"{t['term']} ({t['score']})" for t in package.research_terms[:12]))
+    return 0
+
+
+def _today():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo(get_settings().timezone)).date()
+
+
+def cmd_plan(_args: argparse.Namespace) -> int:
+    from app.database.session import session_scope
+    from app.scheduler.selector import choose_plan
+    from app.scheduler.service import dates_needing_videos
+
+    settings, engine = get_settings(), _engine()
+    days = dates_needing_videos(settings, engine, _today())
+    if not days:
+        print("buffer is full: every day in the next BUFFER_DAYS already has a video")
+    for day in days:
+        with session_scope(engine) as session:
+            plan = choose_plan(session, settings, day)
+        print(f"{day}  {plan.recipe.slug:<20} {plan.duration_seconds // 60} min  publish {plan.publish_at:%Y-%m-%d %H:%M %Z}  score {plan.score}")
+    return 0
+
+
+def cmd_produce(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from app.database.states import VideoState
+    from app.scheduler.pipeline import run_production
+    from app.scheduler.service import dates_needing_videos, produce_for_day
+
+    settings, engine = get_settings(), _engine()
+    if args.video_id:
+        return 0 if run_production(settings, engine, args.video_id) is VideoState.READY else 1
+    if args.date:
+        day = date.fromisoformat(args.date)
+    else:
+        pending = dates_needing_videos(settings, engine, _today())
+        day = pending[0] if pending else _today()
+    video_id = produce_for_day(settings, engine, day, args.recipe)
+    if video_id:
+        print(f"READY: {video_id} -> {settings.output_dir / video_id}")
+    return 0 if video_id else 1
+
+
+def cmd_upload(args: argparse.Namespace) -> int:
+    from app.scheduler.service import upload_ready
+
+    state = upload_ready(get_settings(), _engine(), args.video_id)
+    print(f"{args.video_id}: {state.value}")
+    return 0
+
+
+def cmd_run_scheduler(_args: argparse.Namespace) -> int:
+    from app.scheduler.service import run_scheduler
+
+    run_scheduler(get_settings(), _engine())
+    return 0
+
+
+def cmd_command(name: str) -> int:
+    from app.database.models import Command
+    from app.database.session import session_scope
+
+    with session_scope(_engine()) as session:
+        session.add(Command(name=name, status="done"))
+    print(f"automation {'paused' if name == 'pause' else 'resumed'}")
+    return 0
+
+
+def cmd_videos(_args: argparse.Namespace) -> int:
+    from sqlalchemy import select
+
+    from app.database.models import Video
+    from app.database.session import session_scope
+
+    with session_scope(_engine()) as session:
+        for video in session.scalars(select(Video).order_by(Video.created_at.desc()).limit(30)):
+            failed = f" (from {video.failed_from_state.value})" if video.failed_from_state else ""
+            print(f"{video.id:<40} {video.state.value:<22}{failed} publish {video.target_publish_date}")
+    return 0
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from app.dashboard.app import create_app
+
+    if args.host not in ("127.0.0.1", "localhost"):
+        log.warning("the dashboard has no login; binding to %s exposes it to your network", args.host)
+    print(f"Panel en http://{args.host}:{args.port}")
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -224,28 +356,49 @@ def build_parser() -> argparse.ArgumentParser:
     black.add_argument("--reason", required=True)
     black.set_defaults(func=cmd_blacklist_sound)
 
+    sub.add_parser("index-visuals", help="index your footage in assets/visuals").set_defaults(func=cmd_index_visuals)
+    video = sub.add_parser("produce-video", help="build the long video for a recipe from your footage and a rendered audio track")
+    video.add_argument("--recipe", required=True)
+    video.add_argument("--audio", required=True, help="audio.flac from produce-audio; sets the video duration")
+    video.add_argument("--seed", type=int, default=None)
+    video.add_argument("--segment-minutes", type=float, default=10.0)
+    video.add_argument("--variants", type=int, default=6)
+    video.set_defaults(func=cmd_produce_video)
+
+    meta = sub.add_parser("metadata-preview", help="generate English title, description and tags for a recipe")
+    meta.add_argument("--recipe", required=True)
+    meta.add_argument("--minutes", type=float, default=240)
+    meta.add_argument("--seed", type=int, default=None)
+    meta.add_argument("--no-research", action="store_true", help="skip YouTube search suggestions")
+    meta.set_defaults(func=cmd_metadata_preview)
+
     sub.add_parser("youtube-auth", help="authorize the bot on your YouTube channel (opens the browser once)").set_defaults(func=cmd_youtube_auth)
     upload_test = sub.add_parser("youtube-test-upload", help="upload a private 30-second test video")
     upload_test.add_argument("--confirm", action="store_true")
     upload_test.set_defaults(func=cmd_youtube_test_upload)
 
-    plan = sub.add_parser("plan", help="choose the next ambients to produce")
-    plan.add_argument("--days", type=int, default=None)
-    plan.set_defaults(func=not_yet(6))
+    sub.add_parser("plan", help="show which days need a video and what would be produced (no changes)").set_defaults(func=cmd_plan)
 
-    produce = sub.add_parser("produce", help="produce a video (resumes from last valid state)")
+    produce = sub.add_parser("produce", help="plan and produce one video up to READY, or resume one")
     target = produce.add_mutually_exclusive_group()
-    target.add_argument("--recipe")
-    target.add_argument("--video-id")
-    produce.add_argument("--minutes", type=int, default=None, help="override duration")
-    produce.set_defaults(func=not_yet(6))
+    target.add_argument("--recipe", help="force a recipe instead of the daily selector")
+    target.add_argument("--video-id", help="resume an existing video from its last valid stage")
+    produce.add_argument("--date", default=None, help="target publish date YYYY-MM-DD (default: next day that needs a video)")
+    produce.set_defaults(func=cmd_produce)
 
-    sub.add_parser("run-scheduler", help="run the daily scheduler worker").set_defaults(func=not_yet(6))
+    upload = sub.add_parser("upload", help="upload and schedule a READY video (MODE=production)")
+    upload.add_argument("--video-id", required=True)
+    upload.set_defaults(func=cmd_upload)
+
+    sub.add_parser("run-scheduler", help="run the daily scheduler worker").set_defaults(func=cmd_run_scheduler)
+    sub.add_parser("pause", help="pause automation").set_defaults(func=lambda a: cmd_command("pause"))
+    sub.add_parser("resume", help="resume automation").set_defaults(func=lambda a: cmd_command("resume"))
+    sub.add_parser("videos", help="list videos and their states").set_defaults(func=cmd_videos)
 
     dashboard = sub.add_parser("dashboard", help="start the control panel")
     dashboard.add_argument("--host", default="127.0.0.1")
     dashboard.add_argument("--port", type=int, default=8000)
-    dashboard.set_defaults(func=not_yet(7))
+    dashboard.set_defaults(func=cmd_dashboard)
     return parser
 
 

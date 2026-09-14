@@ -1,0 +1,11 @@
+.venv
+.git
+.env
+data
+output
+cache
+work
+logs
+assets/visuals/*
+assets/audio_own/*
+docs/audit_screenshots

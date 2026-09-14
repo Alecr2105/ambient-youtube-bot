@@ -1,0 +1,25 @@
+# Copiá este archivo como visuals.yaml (en esta misma carpeta) para etiquetar tus clips.
+# Sin visuals.yaml, las etiquetas salen del nombre del archivo: "rain_window_01.mp4" -> [rain, window].
+# Las etiquetas se comparan con visual_tags de cada receta (app/audio/recipes/*.yaml).
+#
+# Opciones por archivo:
+#   tags:          lista de etiquetas en inglés
+#   allow_mirror:  true si el clip se puede espejar horizontalmente sin que se note (nada de texto, carteles ni volcanes reconocibles)
+#   exclude:       true para que el bot lo ignore
+
+defaults:
+  allow_mirror: false
+
+files:
+  lluvia_ventana_cabina.mp4:
+    tags: [rain, window, cabin]
+    allow_mirror: true
+  catarata_la_fortuna.mov:
+    tags: [waterfall, jungle, rainforest]
+  techo_zinc_aguacero.mp4:
+    tags: [rain, roof, zinc]
+  volcan_arenal_atardecer.jpg:
+    tags: [volcano, sunset, mountains]
+    allow_mirror: false
+  prueba_mala.mp4:
+    exclude: true

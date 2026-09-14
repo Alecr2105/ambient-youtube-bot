@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Ambient Bot{% endblock %}</title>
+<style>
+  :root { --bg:#f4f2ec; --panel:#fffdf8; --text:#1d2621; --muted:#66736b; --line:#dcd6c8; --accent:#2f6b4f; --warn:#a8641b; --bad:#a3322a; --good:#2f7a47; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#101512; --panel:#171e19; --text:#e3eae5; --muted:#8fa196; --line:#29332c; --accent:#78c09a; --warn:#e0a45a; --bad:#e07a70; --good:#79c794; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; padding:.8rem 1.25rem; border-bottom:1px solid var(--line); background:var(--panel); }
+  header strong { font-size:1.05rem; margin-right:auto; }
+  nav a { color:var(--text); text-decoration:none; margin-right:1rem; }
+  nav a:hover { color:var(--accent); }
+  .mode { font-size:.8rem; padding:.15rem .5rem; border-radius:99px; border:1px solid var(--line); }
+  .mode.production { color:var(--bad); border-color:var(--bad); }
+  main { max-width:72rem; margin:0 auto; padding:1.25rem; }
+  h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
+  h2 { font-size:1rem; margin:1.6rem 0 .6rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .grid { display:grid; gap:.8rem; grid-template-columns:repeat(auto-fit, minmax(11rem, 1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:.8rem 1rem; }
+  .card .n { font-size:1.6rem; font-variant-numeric:tabular-nums; }
+  .card .l { color:var(--muted); font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:.45rem .7rem; border-bottom:1px solid var(--line); vertical-align:top; font-size:.9rem; }
+  th { color:var(--muted); font-weight:600; font-size:.8rem; text-transform:uppercase; }
+  .scroll { overflow-x:auto; }
+  .ok { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); } .muted { color:var(--muted); }
+  form.inline { display:inline; }
+  button, input, select { font:inherit; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:7px; padding:.4rem .8rem; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid var(--line); }
+  input { padding:.35rem .5rem; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); }
+  .actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+  code, pre { font-family: ui-monospace, Consolas, monospace; font-size:.85rem; }
+  pre { white-space:pre-wrap; background:var(--panel); border:1px solid var(--line); padding:.8rem; border-radius:8px; }
+  img.thumb { max-width:100%; width:28rem; border-radius:8px; border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <strong>Ambient Bot</strong>
+  <nav><a href="/">Resumen</a><a href="/visuals">Visuales</a><a href="/sounds">Sonidos y licencias</a><a href="/settings">Configuración</a></nav>
+  <span class="mode {{ mode }}">MODE={{ mode }}</span>
+</header>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Visuales · Ambient Bot{% endblock %}
+{% block content %}
+<h1>Visuales</h1>
+<div class="actions">
+  <form method="post" action="/commands/reindex_visuals"><button>Reindexar</button></form>
+  <span class="muted">Carpeta: <code>{{ root }}</code> · etiquetas en <code>visuals.yaml</code></span>
+</div>
+<h2>{{ visuals|length }} archivos</h2>
+<div class="scroll"><table>
+  <tr><th>Archivo</th><th>Tipo</th><th>Duración</th><th>Resolución</th><th>Etiquetas</th><th>Espejo</th><th>Usos</th><th>Último uso</th></tr>
+  {% for v in visuals %}
+  <tr class="{{ 'muted' if v.missing else '' }}">
+    <td>{{ v.path.split("\\")[-1].split("/")[-1] }}{% if v.missing %} <span class="bad">(falta)</span>{% endif %}</td>
+    <td>{{ v.type }}</td><td>{{ "%.0f s"|format(v.duration) if v.duration else "—" }}</td>
+    <td>{{ v.width }}×{{ v.height }}</td><td>{{ v.tags|join(", ") }}</td><td>{{ "sí" if v.allow_mirror else "no" }}</td>
+    <td>{{ v.usage_count }}</td><td>{{ v.last_used_at.strftime("%Y-%m-%d") if v.last_used_at else "—" }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Todavía no hay visuales. Copiá tus clips a la carpeta y reindexá.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

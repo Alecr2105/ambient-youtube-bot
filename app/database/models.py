@@ -150,6 +150,7 @@ class Visual(TimestampMixin, Base):
     height: Mapped[int] = mapped_column(Integer)
     fps: Mapped[float | None] = mapped_column(Float)
     tags: Mapped[list[Any]] = mapped_column(JSON, default=list)
+    allow_mirror: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     checksum: Mapped[str] = mapped_column(String(64), index=True)

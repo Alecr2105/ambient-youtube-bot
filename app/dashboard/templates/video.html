@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ video.id }} · Ambient Bot{% endblock %}
+{% block content %}
+<h1>{{ video.id }}</h1>
+<p>Estado: <strong class="{% if video.state.value == 'FAILED' %}bad{% elif video.state.value in ('READY','SCHEDULED','PUBLISHED') %}ok{% endif %}">{{ video.state.value }}</strong>
+  {% if video.failed_from_state %}(falló en {{ video.failed_from_state.value }}){% endif %}
+  · publicación {{ video.target_publish_date }} · {{ video.duration_seconds // 60 }} min · semilla {{ video.seed }}</p>
+<div class="actions">
+  {% if video.state.value == 'FAILED' %}<form method="post" action="/commands/resume_video"><input type="hidden" name="video_id" value="{{ video.id }}"><button>Reintentar desde {{ video.failed_from_state.value }}</button></form>{% endif %}
+  {% if video.state.value == 'READY' and mode == 'production' %}<form method="post" action="/commands/upload_video"><input type="hidden" name="video_id" value="{{ video.id }}"><button>Subir y programar</button></form>{% endif %}
+</div>
+
+{% if metadata %}
+<h2>Metadata</h2>
+{% if has_thumb %}<img class="thumb" src="/videos/{{ video.id }}/thumbnail" alt="Miniatura seleccionada">{% endif %}
+<p><strong>{{ metadata.title }}</strong></p>
+<pre>{{ metadata.description }}</pre>
+<p class="muted">Tags: {{ metadata.tags|join(", ") }}</p>
+{% endif %}
+
+{% if youtube %}
+<h2>YouTube</h2>
+<p><a href="{{ youtube.url }}">{{ youtube.url }}</a> · {{ youtube.privacy_status }} · publishAt {{ youtube.publish_at }}</p>
+{% endif %}
+
+{% if quality %}
+<h2>Quality check {% if quality.passed %}<span class="ok">aprobado</span>{% else %}<span class="bad">rechazado</span>{% endif %}</h2>
+<div class="scroll"><table>
+  <tr><th>Sección</th><th>Control</th><th>Resultado</th><th>Valor</th><th>Límite</th></tr>
+  {% for section in quality.sections %}{% for c in section.checks %}
+  <tr><td>{{ section.section }}</td><td>{{ c.name }}</td><td class="{{ 'ok' if c.passed else 'bad' }}">{{ "OK" if c.passed else "FALLA" }}</td><td>{{ c.value }}</td><td>{{ c.threshold }}</td></tr>
+  {% endfor %}{% endfor %}
+</table></div>
+{% endif %}
+
+{% if licenses %}
+<h2>Sonidos y licencias</h2>
+<div class="scroll"><table>
+  <tr><th>Capa / evento</th><th>Fuente</th><th>Licencia</th><th>Origen</th></tr>
+  {% for r in licenses.resources %}
+  <tr><td>{{ r["item"] }}</td><td>{{ r.provider }} {{ r.asset_id or "" }}</td><td>{{ r.license_type }}</td><td>{% if r.source_url %}<a href="{{ r.source_url }}">{{ r.author }}</a>{% endif %}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<h2>Historial de estados</h2>
+<div class="scroll"><table>
+  <tr><th>Cuándo</th><th>De</th><th>A</th><th>Detalle</th></tr>
+  {% for s in states %}<tr><td>{{ s.at.strftime("%Y-%m-%d %H:%M:%S") }}</td><td>{{ s.from_state.value if s.from_state else "" }}</td><td>{{ s.to_state.value }}</td><td>{{ s.detail or "" }}</td></tr>{% endfor %}
+</table></div>
+
+{% if errors %}
+<h2>Errores</h2>
+{% for e in errors %}<pre>{{ e.created_at }} · {{ e.stage }} · intento {{ e.attempt }}
+{{ e.error_type }}: {{ e.message }}</pre>{% endfor %}
+{% endif %}
+{% endblock %}
