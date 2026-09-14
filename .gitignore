@@ -16,6 +16,9 @@ cache/
 work/
 logs/
 
+# Audit evidence may contain personal data
+docs/audit_screenshots/
+
 # User-owned media (never versioned)
 assets/visuals/*
 !assets/visuals/.gitkeep

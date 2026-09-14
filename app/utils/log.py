@@ -38,3 +38,6 @@ def setup_logging(log_dir: Path, level: str = "INFO") -> None:
     console.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s", "%H:%M:%S"))
     root.addHandler(console)
     logging.getLogger("alembic").setLevel(logging.WARNING)
+    # The OAuth flow logs full authorization URLs and codes at INFO.
+    logging.getLogger("google_auth_oauthlib").setLevel(logging.WARNING)
+    logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)

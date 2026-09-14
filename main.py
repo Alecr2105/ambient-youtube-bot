@@ -143,6 +143,36 @@ def cmd_blacklist_sound(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_youtube_auth(_args: argparse.Namespace) -> int:
+    from app.youtube.auth import build_service, load_credentials
+    from app.youtube.quota import QuotaTracker
+    from app.youtube.uploader import my_channel
+
+    settings = get_settings()
+    print("Se abre el navegador: elegí la cuenta/canal de YouTube del bot y autorizá 'Ambient Bot'.")
+    print("Si Google muestra 'Google no verificó esta app', entrá en 'Configuración avanzada' > 'Ir a Ambient Bot'.")
+    credentials = load_credentials(settings, interactive=True)
+    channel = my_channel(build_service(credentials), QuotaTracker(_engine(), settings))
+    if channel is None:
+        log.error("authorized account has no YouTube channel")
+        return 1
+    print(f"Conectado al canal: {channel['snippet']['title']} (https://www.youtube.com/channel/{channel['id']})")
+    print(f"Token guardado en {settings.youtube_token_path}")
+    return 0
+
+
+def cmd_youtube_test_upload(args: argparse.Namespace) -> int:
+    from app.youtube.smoke_upload import run_test_upload
+
+    if not args.confirm:
+        log.error("this uploads a PRIVATE 30-second test video to your channel; re-run with --confirm")
+        return 2
+    result = run_test_upload(get_settings())
+    for key, value in result.items():
+        print(f"{key}: {value}")
+    return 0 if result["privacy_status"] == "private" else 1
+
+
 def not_yet(phase: int):
     def handler(args: argparse.Namespace) -> int:
         log.error("command '%s' is implemented in phase %d", args.command, phase)
@@ -193,6 +223,11 @@ def build_parser() -> argparse.ArgumentParser:
     black.add_argument("sound_id", type=int)
     black.add_argument("--reason", required=True)
     black.set_defaults(func=cmd_blacklist_sound)
+
+    sub.add_parser("youtube-auth", help="authorize the bot on your YouTube channel (opens the browser once)").set_defaults(func=cmd_youtube_auth)
+    upload_test = sub.add_parser("youtube-test-upload", help="upload a private 30-second test video")
+    upload_test.add_argument("--confirm", action="store_true")
+    upload_test.set_defaults(func=cmd_youtube_test_upload)
 
     plan = sub.add_parser("plan", help="choose the next ambients to produce")
     plan.add_argument("--days", type=int, default=None)

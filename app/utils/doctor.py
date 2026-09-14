@@ -31,6 +31,11 @@ def run_checks(settings: Settings) -> list[Check]:
     checks.extend(_ffmpeg_checks(settings))
     checks.append(_database_check(settings))
 
+    secrets = settings.youtube_client_secrets_path
+    token = settings.youtube_token_path
+    checks.append(Check("youtube client secret", bool(secrets and secrets.exists()), str(secrets) if secrets and secrets.exists() else "missing", blocking=False))
+    checks.append(Check("youtube token", bool(token and token.exists()), "present" if token and token.exists() else "missing: run `python main.py youtube-auth`", blocking=False))
+
     offenders = settings.secrets_inside_repo()
     checks.append(Check("secrets outside repo", not offenders, "ok" if not offenders else f"move outside repo: {offenders}"))
 

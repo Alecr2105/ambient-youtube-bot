@@ -1,0 +1,11 @@
+# YouTube Data API quota cost per method.
+# Source: https://developers.google.com/youtube/v3/determine_quota_cost (checked 2026-09-13).
+# videos.insert and search.list have their own buckets (100 calls/day each by default);
+# everything else shares the general 10,000-unit bucket. Daily limits live in .env.
+videos.insert: {bucket: uploads, units: 1}
+search.list: {bucket: search, units: 1}
+videos.list: {bucket: general, units: 1}
+channels.list: {bucket: general, units: 1}
+videos.update: {bucket: general, units: 50}
+thumbnails.set: {bucket: general, units: 50}
+playlistItems.insert: {bucket: general, units: 50}
