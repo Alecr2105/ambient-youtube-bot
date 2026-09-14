@@ -1,0 +1,20 @@
+﻿slug: rain_on_roof
+name: Rain on a Tin Roof
+subniches: [sleep, relaxation]
+keywords: [rain on roof, rain on tin roof, rain sounds for sleeping, heavy rain sounds, cozy rain]
+visual_tags: [rain, roof, zinc]
+costa_rica_eligible: true
+layers:
+  - name: roof
+    generator: rain_roof
+    params: {drops_per_second: [500, 1000], metal_level: [0.45, 0.7], bed_level: [0.5, 0.7], boom_level: [0.2, 0.4]}
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 180}
+    intensity_depth_db: 3.0
+    eq: {highpass_hz: 45}
+  - name: gutter_rain
+    generator: rain
+    params: {drops_per_second: [800, 1400], brightness: [0.3, 0.5], bed_level: 0.7, drop_level: 0.4}
+    gain_db: [-10, -7]
+    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
+    intensity_depth_db: 2.0
+    eq: {lowpass_hz: 6000}

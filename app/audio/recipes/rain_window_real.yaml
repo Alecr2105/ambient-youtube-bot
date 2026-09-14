@@ -1,0 +1,29 @@
+﻿slug: rain_window_real
+name: Rain on Window (Field Recording Texture)
+subniches: [sleep, relaxation, study]
+keywords: [rain on window, rain sounds for sleeping, relaxing rain, cozy rain, sleep ambience]
+visual_tags: [rain, window]
+costa_rica_eligible: false
+layers:
+  - name: window_texture
+    source: library
+    library:
+      category: rain_window_texture
+      query: rain on window glass
+      min_duration_s: 60
+      max_duration_s: 900
+      count: 2
+      pool_size: 6
+    generator: rain_window
+    params: {taps_per_second: [140, 240], tap_level: [0.5, 0.7], outside_level: [0.6, 0.8], rivulet_level: [0.15, 0.3]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 30, reverse_probability: 0.2}
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 50}
+  - name: procedural_bed
+    generator: rain
+    params: {drops_per_second: [900, 1600], brightness: [0.25, 0.4], bed_level: 0.8, drop_level: 0.3}
+    gain_db: [-12, -8]
+    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
+    intensity_depth_db: 2.5
+    eq: {lowpass_hz: 5000}

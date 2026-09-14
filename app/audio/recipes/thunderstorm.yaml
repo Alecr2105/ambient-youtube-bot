@@ -1,0 +1,29 @@
+﻿slug: thunderstorm
+name: Thunderstorm and Rain
+subniches: [sleep, relaxation]
+keywords: [thunderstorm sounds, thunder and rain, rain and thunder sounds for sleeping, heavy rain sounds, tropical storm]
+visual_tags: [rain, storm, clouds, jungle, forest]
+costa_rica_eligible: true
+layers:
+  - name: rain
+    generator: rain
+    params: {drops_per_second: [1400, 2400], brightness: [0.3, 0.5], bed_level: [0.7, 0.9], drop_level: [0.35, 0.55]}
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 180}
+    intensity_depth_db: 3.5
+    eq: {highpass_hz: 60}
+  - name: storm_wind
+    generator: wind
+    params: {gustiness: [0.5, 0.75], whistle_level: [0.0, 0.08]}
+    gain_db: [-12, -8]
+    automation: {depth_db: 2.5, min_period_s: 20, max_period_s: 90}
+    intensity_depth_db: 4.0
+    eq: {lowpass_hz: 3000}
+events:
+  - name: thunder
+    generator: thunder
+    params: {min_distance: 0.25, max_distance: 1.0}
+    rate_per_hour: [10, 22]
+    gain_db: [-9, -1]
+    min_gap_s: 35
+    intensity_rate_scale: 0.8
+intensity: {min_period_s: 600, max_period_s: 1800}

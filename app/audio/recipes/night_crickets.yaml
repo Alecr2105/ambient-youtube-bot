@@ -1,0 +1,26 @@
+﻿slug: night_crickets
+name: Night Forest with Crickets
+subniches: [sleep, relaxation]
+keywords: [night sounds, crickets chirping, forest at night, night ambience, nature sounds for sleeping]
+visual_tags: [night, forest, jungle]
+costa_rica_eligible: true
+layers:
+  - name: crickets
+    generator: crickets
+    params: {individuals: [4, 9], chorus_level: [0.2, 0.4]}
+    gain_db: [-4, -1]
+    automation: {depth_db: 2.0, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 1.5
+    eq: {highpass_hz: 1500}
+  - name: night_breeze
+    generator: wind
+    params: {gustiness: [0.2, 0.4], whistle_level: 0.0}
+    gain_db: [-8, -5]
+    automation: {depth_db: 2.5, min_period_s: 25, max_period_s: 120}
+    eq: {lowpass_hz: 1800}
+  - name: distant_stream
+    generator: river
+    params: {flow: [0.3, 0.5], bubbles_per_second: [20, 40], bubble_level: 0.3, rumble_level: 0.2}
+    gain_db: [-16, -11]
+    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
+    eq: {lowpass_hz: 3000}

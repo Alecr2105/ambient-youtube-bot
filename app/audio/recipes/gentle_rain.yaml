@@ -1,0 +1,20 @@
+﻿slug: gentle_rain
+name: Gentle Rain
+subniches: [sleep, relaxation, study]
+keywords: [gentle rain sounds, relaxing rain, rain sounds for sleeping, rain on leaves, nature sounds for sleeping]
+visual_tags: [rain, leaves, forest, jungle]
+costa_rica_eligible: true
+layers:
+  - name: rain
+    generator: rain
+    params: {drops_per_second: [500, 900], brightness: [0.45, 0.65], bed_level: [0.45, 0.6], drop_level: [0.55, 0.75]}
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 180}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 80}
+  - name: soft_wind
+    generator: wind
+    params: {gustiness: [0.25, 0.45], whistle_level: 0.0}
+    gain_db: [-16, -12]
+    automation: {depth_db: 2.0, min_period_s: 30, max_period_s: 120}
+    eq: {lowpass_hz: 2500}
+intensity: {min_period_s: 900, max_period_s: 2400}

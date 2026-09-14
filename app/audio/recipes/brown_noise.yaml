@@ -1,0 +1,13 @@
+slug: brown_noise
+name: Brown Noise
+subniches: [sleep, study]
+keywords: [brown noise, brown noise for sleep, brown noise for focus, deep sleep sounds, study ambience]
+visual_tags: [dark, night, abstract]
+costa_rica_eligible: false
+layers:
+  - name: brown
+    generator: brown_noise
+    params: {width: [0.6, 0.9]}
+    automation: {depth_db: 0.5, min_period_s: 120, max_period_s: 600}
+    eq: {highpass_hz: 25, lowpass_hz: 11000}
+master: {compressor_ratio: 1.0}

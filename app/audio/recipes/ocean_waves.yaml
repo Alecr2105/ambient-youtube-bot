@@ -1,0 +1,19 @@
+﻿slug: ocean_waves
+name: Ocean Waves
+subniches: [sleep, relaxation, study]
+keywords: [ocean waves for sleep, ocean sounds, beach sounds, relaxing waves, nature sounds for sleeping]
+visual_tags: [ocean, beach, waves, sunset]
+costa_rica_eligible: true
+layers:
+  - name: waves
+    generator: ocean
+    params: {min_period_s: [7, 9], max_period_s: [12, 15], wash_level: [0.45, 0.75], surf_level: [0.15, 0.3]}
+    automation: {depth_db: 1.0, min_period_s: 60, max_period_s: 300}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 35}
+  - name: sea_breeze
+    generator: wind
+    params: {gustiness: [0.2, 0.4], whistle_level: 0.0}
+    gain_db: [-20, -15]
+    automation: {depth_db: 2.0, min_period_s: 30, max_period_s: 120}
+    eq: {lowpass_hz: 2000}

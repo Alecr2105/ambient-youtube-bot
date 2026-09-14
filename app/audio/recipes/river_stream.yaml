@@ -1,0 +1,19 @@
+﻿slug: river_stream
+name: River Stream
+subniches: [study, relaxation, sleep]
+keywords: [river sounds, stream sounds, flowing water, nature sounds for studying, forest river]
+visual_tags: [river, stream, forest, jungle]
+costa_rica_eligible: true
+layers:
+  - name: river
+    generator: river
+    params: {flow: [0.45, 0.75], bubbles_per_second: [40, 90], bubble_level: [0.35, 0.6], rumble_level: [0.2, 0.35]}
+    automation: {depth_db: 1.0, min_period_s: 60, max_period_s: 240}
+    intensity_depth_db: 1.5
+    eq: {highpass_hz: 40}
+  - name: canopy_wind
+    generator: wind
+    params: {gustiness: [0.3, 0.5], whistle_level: 0.0}
+    gain_db: [-22, -17]
+    automation: {depth_db: 2.5, min_period_s: 20, max_period_s: 90}
+    eq: {highpass_hz: 300, lowpass_hz: 4000}

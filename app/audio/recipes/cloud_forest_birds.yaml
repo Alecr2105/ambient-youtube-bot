@@ -1,0 +1,45 @@
+slug: cloud_forest_birds
+name: Morning Birdsong in the Cloud Forest
+subniches: [relaxation, study]
+keywords: [birds chirping, forest sounds, morning birdsong, cloud forest, nature sounds for studying, costa rica]
+visual_tags: [forest, cloud_forest, morning, birds, jungle]
+costa_rica_eligible: true
+layers:
+  - name: forest_air
+    source: library
+    library:
+      category: forest_ambience_texture
+      query: rainforest ambience morning
+      min_duration_s: 60
+      max_duration_s: 900
+      count: 2
+      pool_size: 6
+    generator: wind
+    params: {gustiness: [0.2, 0.35], whistle_level: 0.0}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-6, -3]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    eq: {highpass_hz: 60}
+  - name: distant_stream
+    generator: river
+    params: {flow: [0.3, 0.5], bubbles_per_second: [25, 50], bubble_level: 0.3, rumble_level: 0.2}
+    gain_db: [-16, -11]
+    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
+    eq: {lowpass_hz: 3500}
+events:
+  - name: birds
+    source: library
+    library:
+      category: birdsong_events
+      query: bird song forest
+      min_duration_s: 1.5
+      max_duration_s: 20
+      count: 12
+      pool_size: 30
+    pitch_cents: 60
+    required: true
+    rate_per_hour: [120, 260]
+    gain_db: [-16, -6]
+    min_gap_s: 3
+    intensity_rate_scale: 0.6
+intensity: {min_period_s: 600, max_period_s: 1800}
