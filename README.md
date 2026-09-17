@@ -36,6 +36,9 @@ Mientras el proyecto no pase la **auditoría de YouTube**, las subidas por API q
 1. Copiá clips (MP4/MOV, ≥ 30 s) y fotos (JPG/PNG/WEBP) a `assets/visuals/`. El bot nunca los modifica.
 2. Etiquetalos con nombres descriptivos (`rain_window_01.mp4` → `rain`, `window`) o con `assets/visuals/visuals.yaml` (ver `visuals.example.yaml`). Las etiquetas se cruzan con `visual_tags` de cada receta.
 3. `python main.py index-visuals`.
+4. `python main.py visuals` dice qué recetas ya se pueden producir con lo que hay y qué etiquetas conviene filmar después.
+
+Guía de qué grabar y con qué requisitos técnicos: `docs/GRABACION_VISUALES.md`.
 
 ## 4. Primer video en modo TEST
 

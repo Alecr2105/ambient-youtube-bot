@@ -202,6 +202,17 @@ def cmd_index_visuals(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_visuals(_args: argparse.Namespace) -> int:
+    from app.database.session import session_scope
+    from app.visuals.coverage import recipe_coverage, render_report
+
+    settings = get_settings()
+    with session_scope(_engine()) as session:
+        report = recipe_coverage(session)
+    print(render_report(report, str(settings.visuals_dir)))
+    return 0 if any(coverage.ready for coverage in report) else 1
+
+
 def cmd_produce_video(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -240,18 +251,29 @@ def _today():
     return datetime.now(ZoneInfo(get_settings().timezone)).date()
 
 
+def _no_footage(exc: Exception) -> int:
+    log.error("%s", exc)
+    log.error("run `python main.py visuals` to see what footage each recipe needs, "
+              "put your clips in assets/visuals and run `python main.py index-visuals`")
+    return 1
+
+
 def cmd_plan(_args: argparse.Namespace) -> int:
     from app.database.session import session_scope
     from app.scheduler.selector import choose_plan
     from app.scheduler.service import dates_needing_videos
+    from app.visuals.matcher import NoMatchingVisualsError
 
     settings, engine = get_settings(), _engine()
     days = dates_needing_videos(settings, engine, _today())
     if not days:
         print("buffer is full: every day in the next BUFFER_DAYS already has a video")
     for day in days:
-        with session_scope(engine) as session:
-            plan = choose_plan(session, settings, day)
+        try:
+            with session_scope(engine) as session:
+                plan = choose_plan(session, settings, day)
+        except NoMatchingVisualsError as exc:
+            return _no_footage(exc)
         print(f"{day}  {plan.recipe.slug:<20} {plan.duration_seconds // 60} min  publish {plan.publish_at:%Y-%m-%d %H:%M %Z}  score {plan.score}")
     return 0
 
@@ -262,6 +284,7 @@ def cmd_produce(args: argparse.Namespace) -> int:
     from app.database.states import VideoState
     from app.scheduler.pipeline import run_production
     from app.scheduler.service import dates_needing_videos, produce_for_day
+    from app.visuals.matcher import NoMatchingVisualsError
 
     settings, engine = get_settings(), _engine()
     if args.video_id:
@@ -271,7 +294,10 @@ def cmd_produce(args: argparse.Namespace) -> int:
     else:
         pending = dates_needing_videos(settings, engine, _today())
         day = pending[0] if pending else _today()
-    video_id = produce_for_day(settings, engine, day, args.recipe)
+    try:
+        video_id = produce_for_day(settings, engine, day, args.recipe)
+    except NoMatchingVisualsError as exc:
+        return _no_footage(exc)
     if video_id:
         print(f"READY: {video_id} -> {settings.output_dir / video_id}")
     return 0 if video_id else 1
@@ -371,6 +397,7 @@ def build_parser() -> argparse.ArgumentParser:
     black.set_defaults(func=cmd_blacklist_sound)
 
     sub.add_parser("index-visuals", help="index your footage in assets/visuals").set_defaults(func=cmd_index_visuals)
+    sub.add_parser("visuals", help="which recipes your footage already covers and what to film next").set_defaults(func=cmd_visuals)
     video = sub.add_parser("produce-video", help="build the long video for a recipe from your footage and a rendered audio track")
     video.add_argument("--recipe", required=True)
     video.add_argument("--audio", required=True, help="audio.flac from produce-audio; sets the video duration")
