@@ -164,3 +164,26 @@ def test_unattended_run_never_opens_browser(make_settings, tmp_path):
     settings = make_settings(youtube_client_secrets_path=tmp_path / "cs.json", youtube_token_path=tmp_path / "missing.json")
     with pytest.raises(YouTubeAuthError, match="youtube-auth"):
         load_credentials(settings, interactive=False)
+
+
+def test_unlisted_upload_body_keeps_compliance_fields():
+    body = build_video_body(meta(privacy_status="unlisted", title="Ambient Bot - YouTube API usage walkthrough"))
+    assert body["status"]["privacyStatus"] == "unlisted"
+    assert body["status"]["selfDeclaredMadeForKids"] is False
+    assert "publishAt" not in body["status"]
+
+
+def test_publish_at_is_rejected_for_unlisted():
+    future = datetime.now(UTC) + timedelta(days=1)
+    with pytest.raises(MetadataError, match="private"):
+        build_video_body(meta(privacy_status="unlisted", publish_at=future))
+
+
+def test_single_file_upload_charges_the_uploads_bucket(quota, tmp_path):
+    video = tmp_path / "screencast.mp4"
+    video.write_bytes(b"\0" * 2048)
+    service = FakeService([(None, {"id": "scr123", "status": {"privacyStatus": "unlisted"}})])
+    response = upload_video(service, video, meta(privacy_status="unlisted"), quota)
+    assert response["id"] == "scr123"
+    assert quota.used("uploads") == 1
+    assert service.calls[0]["body"]["status"]["privacyStatus"] == "unlisted"

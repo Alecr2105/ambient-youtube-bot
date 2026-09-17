@@ -79,11 +79,11 @@ def cmd_freesound_auth(_args: argparse.Namespace) -> int:
         settings.freesound_api_key, settings.freesound_client_id, settings.freesound_token_path,
         UsageLedger(_engine(), settings.daily_budget, settings.monthly_budget),
     )
-    print("1. Abrí esta URL, iniciá sesión en Freesound y autorizá la app:\n")
+    print("1. Open this URL, sign in to Freesound and authorize the app:\n")
     print("   " + provider.authorize_url() + "\n")
-    code = input("2. Pegá aquí el código que muestra Freesound: ")
+    code = input("2. Paste the code shown by Freesound: ")
     provider.exchange_code(code)
-    print(f"Token guardado en {settings.freesound_token_path}")
+    print(f"Token stored at {settings.freesound_token_path}")
     return 0
 
 
@@ -149,16 +149,30 @@ def cmd_youtube_auth(_args: argparse.Namespace) -> int:
     from app.youtube.uploader import my_channel
 
     settings = get_settings()
-    print("Se abre el navegador: elegí la cuenta/canal de YouTube del bot y autorizá 'Ambient Bot'.")
-    print("Si Google muestra 'Google no verificó esta app', entrá en 'Configuración avanzada' > 'Ir a Ambient Bot'.")
+    print("Opening the browser: choose the YouTube channel this tool publishes to and authorize 'Ambient Bot'.")
+    print("If Google shows \"Google hasn't verified this app\", open 'Advanced' > 'Go to Ambient Bot'.")
     credentials = load_credentials(settings, interactive=True)
     channel = my_channel(build_service(credentials), QuotaTracker(_engine(), settings))
     if channel is None:
         log.error("authorized account has no YouTube channel")
         return 1
-    print(f"Conectado al canal: {channel['snippet']['title']} (https://www.youtube.com/channel/{channel['id']})")
-    print(f"Token guardado en {settings.youtube_token_path}")
+    print(f"Connected to channel: {channel['snippet']['title']} (https://www.youtube.com/channel/{channel['id']})")
+    print(f"Refresh token stored at {settings.youtube_token_path} (outside the repository)")
     return 0
+
+
+def cmd_youtube_upload_file(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from app.youtube.upload_file import upload_single_file
+
+    if not args.confirm:
+        log.error("this uploads '%s' to your channel as %s; re-run with --confirm", args.file, args.privacy)
+        return 2
+    result = upload_single_file(get_settings(), Path(args.file), args.title, args.description, args.privacy, args.tags)
+    for key, value in result.items():
+        print(f"{key}: {value}")
+    return 0 if result["privacy_status"] == args.privacy else 1
 
 
 def cmd_youtube_test_upload(args: argparse.Namespace) -> int:
@@ -373,6 +387,15 @@ def build_parser() -> argparse.ArgumentParser:
     meta.set_defaults(func=cmd_metadata_preview)
 
     sub.add_parser("youtube-auth", help="authorize the bot on your YouTube channel (opens the browser once)").set_defaults(func=cmd_youtube_auth)
+    upload_file = sub.add_parser("youtube-upload-file", help="upload one existing video file (e.g. an audit screencast)")
+    upload_file.add_argument("--file", required=True)
+    upload_file.add_argument("--title", required=True)
+    upload_file.add_argument("--description", default="")
+    upload_file.add_argument("--privacy", choices=["private", "unlisted", "public"], default="private")
+    upload_file.add_argument("--tags", nargs="*", default=[])
+    upload_file.add_argument("--confirm", action="store_true")
+    upload_file.set_defaults(func=cmd_youtube_upload_file)
+
     upload_test = sub.add_parser("youtube-test-upload", help="upload a private 30-second test video")
     upload_test.add_argument("--confirm", action="store_true")
     upload_test.set_defaults(func=cmd_youtube_test_upload)

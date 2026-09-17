@@ -18,6 +18,7 @@ logs/
 
 # Audit evidence may contain personal data
 docs/audit_screenshots/
+docs/screencast/
 
 # User-owned media (never versioned)
 assets/visuals/*
