@@ -4,7 +4,7 @@
 > - Todos los ajustes de §0 y §1 aceptados (colchón de 2 días, sin Pixabay ni AudioCraft automáticos, coffee shop desactivado).
 > - **Prioridad: monetización completa.** `ALLOWED_LICENSES=CC0,PROCEDURAL,OWN` por defecto. CC-BY queda soportado pero apagado, porque la atribución no afecta ingresos pero sí amplía el catálogo de riesgo de procedencia.
 > - **Gasto cero:** `DAILY_BUDGET=0`, `MONTHLY_BUDGET=0`, `AI_AUDIO_PROVIDER=none`, `LLM_PROVIDER=none` (metadata con plantillas).
-> - Velocidad de subida: pendiente. Por defecto H.264 NVENC a ~5 Mbps, configurable.
+> - Velocidad de subida: **medida el 2026-09-20** — 823 MB en ~20 min (≈0,76 MB/s, ~6 Mbps de subida). Un video de 4 h a 5 Mbps pesa ~6,6 GB, o sea **~2,5 h de subida**; con ~55 min de producción son ~3,5 h de máquina por video diario.
 > - Notificaciones: ninguna por ahora (solo dashboard).
 
 > Entregable de la sección 8 del brief (`CLAUDE.md`). Fecha: 2026-09-13.
