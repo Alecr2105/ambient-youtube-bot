@@ -1,5 +1,7 @@
 # YouTube API Services — borrador del formulario de auditoría
 
+> **2026-09-20 — APROBADA.** Google aprobó la auditoría: las subidas por `videos.insert` ya no quedan restringidas a privado, así que el bot puede publicar (o programar con `publishAt`) directamente. Para que el scheduler publique solo hace falta `MODE=production` en `.env`. Los videos privados de prueba (`hE7R9_g7HCE`, `X5sIfIfNKBM`, `n6Nbu2OgnmY`) y el screencast sin listar (`<video-sin-listar>`) ya se pueden borrar.
+
 > **2026-09-17 — Google pidió más evidencia:** *"Kindly provide us with a script / screencast (English Translated Version) demonstrating how the API services are used to upload videos to the YouTube channel."* Plazo: 7 días hábiles. Guion en `docs/YOUTUBE_AUDIT_SCREENCAST.md`, screencast en `docs/screencast/ambient_bot_api_walkthrough.mp4` (2:15, 1080p, subtítulos en inglés) y correo listo en `docs/YOUTUBE_AUDIT_REPLY.md`. Subidas privadas nuevas hechas en cámara: `X5sIfIfNKBM` y `n6Nbu2OgnmY` (2026-09-17). Las dos se pueden borrar cuando termine la auditoría, igual que `hE7R9_g7HCE`.
 
 > **ENVIADO 2026-09-14.** Confirmación de Google: "Your email has been sent — Thank you for submitting the YouTube API Services Form." Evidencia adjunta: `01_privacy_policy.pdf`, `02_homepage.pdf`, `03_terms_of_service.pdf`, `06_oauth_and_upload_evidence.pdf`. Cuota pedida: por defecto (general 10 000, `search.list` 100, `videos.insert` 100). Respuesta esperada por email a <correo-del-dueño>.

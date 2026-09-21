@@ -71,6 +71,23 @@ def test_report_names_what_to_film_and_hides_covered_recipes_from_the_demand(eng
     assert "window" not in demand and demand["ocean"] == 1
 
 
+def test_photos_are_counted_apart_and_small_ones_are_flagged(engine):
+    ocean = load_recipe("ocean_waves")  # visual_tags: ocean, beach, waves, sunset
+    with session_scope(engine) as session:
+        session.add_all([
+            Visual(path="/big.jpg", type="image", duration=None, width=4032, height=3024, fps=None, tags=["beach"], checksum="big"),
+            Visual(path="/small.jpg", type="image", duration=None, width=1600, height=1200, fps=None, tags=["sunset"], checksum="small"),
+        ])
+    with session_scope(engine) as session:
+        coverage = recipe_coverage(session, [ocean])[0]
+        text = render_report([coverage], "assets/visuals")
+
+    assert coverage.ready and coverage.photos == 2 and coverage.video_clips == 0
+    assert coverage.small_photos == ("/small.jpg",)
+    assert "2 photo(s)" in text and "0 clip(s)" not in text
+    assert "small.jpg" in text and "big.jpg" not in text
+
+
 def test_disabled_recipes_are_left_out(engine):
     with session_scope(engine) as session:
         slugs = {coverage.recipe.slug for coverage in recipe_coverage(session)}

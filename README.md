@@ -29,7 +29,9 @@ Copy-Item .env.example .env           # revisá cada variable; están documentad
 4. `python main.py youtube-auth` → elegí el canal del bot, **no** tu canal personal.
 5. Opcional: `python main.py youtube-test-upload --confirm` sube un video **privado** de 30 s.
 
-Mientras el proyecto no pase la **auditoría de YouTube**, las subidas por API quedan privadas. Ver `docs/YOUTUBE_AUDIT.md`.
+La **auditoría de la API de YouTube** está aprobada (2026-09-20): las subidas por API ya pueden ser públicas o programadas con `publishAt`. Ver `docs/YOUTUBE_AUDIT.md`.
+
+> **El canal tiene que estar verificado por teléfono** (https://www.youtube.com/verify). Sin eso YouTube corta las subidas en **15 minutos** — un video más largo se sube completo y después aparece como *"Processing abandoned: video is too long"* — y `thumbnails.set` responde 403. Comprobado el 2026-09-20 con un video de 30 min.
 
 ## 3. Tu footage
 

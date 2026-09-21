@@ -8,6 +8,7 @@ practical question instead: what should the channel owner film next?
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +22,15 @@ from app.visuals.matcher import MAX_VISUALS
 COMFORTABLE_SECONDS = 600.0
 COMFORTABLE_CLIPS = 2
 
+# The renderer scales every visual to *cover* the output frame and then applies a slow zoom,
+# so anything smaller than the frame is enlarged twice over and looks soft for hours.
+MIN_PHOTO_WIDTH = 1920
+MIN_PHOTO_HEIGHT = 1080
+
+
+def is_small(visual: Visual) -> bool:
+    return visual.width < MIN_PHOTO_WIDTH or visual.height < MIN_PHOTO_HEIGHT
+
 
 @dataclass(frozen=True)
 class RecipeCoverage:
@@ -30,6 +40,8 @@ class RecipeCoverage:
     missing_tags: tuple[str, ...]
     video_clips: int
     video_seconds: float
+    photos: int
+    small_photos: tuple[str, ...]
 
     @property
     def ready(self) -> bool:
@@ -39,6 +51,14 @@ class RecipeCoverage:
     @property
     def thin(self) -> bool:
         return self.ready and (self.video_clips < COMFORTABLE_CLIPS or self.video_seconds < COMFORTABLE_SECONDS)
+
+    def summary(self) -> str:
+        parts = []
+        if self.video_clips:
+            parts.append(f"{self.video_clips} clip(s), {self.video_seconds / 60:.0f} min of video")
+        if self.photos:
+            parts.append(f"{self.photos} photo(s)")
+        return ", ".join(parts) or "nothing"
 
 
 def recipe_coverage(session: Session, recipes: list[Recipe] | None = None) -> list[RecipeCoverage]:
@@ -51,6 +71,7 @@ def recipe_coverage(session: Session, recipes: list[Recipe] | None = None) -> li
         matched = [v for v in visuals if wanted & {t.lower() for t in v.tags}]
         covered = {t.lower() for v in matched for t in v.tags} & wanted
         videos = [v for v in matched if v.type == "video"]
+        photos = [v for v in matched if v.type == "image"]
         report.append(
             RecipeCoverage(
                 recipe=recipe,
@@ -59,6 +80,8 @@ def recipe_coverage(session: Session, recipes: list[Recipe] | None = None) -> li
                 missing_tags=tuple(sorted(wanted - covered)),
                 video_clips=len(videos),
                 video_seconds=float(sum(v.duration or 0.0 for v in videos)),
+                photos=len(photos),
+                small_photos=tuple(v.path for v in photos if is_small(v)),
             )
         )
     return report
@@ -83,16 +106,22 @@ def render_report(report: list[RecipeCoverage], visuals_dir: str) -> str:
         if not coverage.ready:
             status, detail = "NO FOOTAGE", f"needs any of: {', '.join(coverage.recipe.visual_tags)}"
         elif coverage.thin:
-            status = "THIN"
-            detail = f"{coverage.video_clips} clip(s), {coverage.video_seconds / 60:.0f} min; film more for variety"
+            status, detail = "THIN", f"{coverage.summary()}; film more for variety"
         else:
-            status = "READY"
-            detail = f"{coverage.video_clips} clip(s), {coverage.video_seconds / 60:.0f} min"
+            status, detail = "READY", coverage.summary()
         if coverage.ready and coverage.missing_tags:
             detail += f"; no footage yet for: {', '.join(coverage.missing_tags)}"
         lines.append(f"[{status:^10}] {coverage.recipe.slug:<{width}}  {detail}")
     ready = [c for c in report if c.ready]
     lines += ["", f"{len(ready)} of {len(report)} enabled recipes can be produced today."]
+    small = sorted({path for coverage in report for path in coverage.small_photos})
+    if small:
+        lines += [
+            "",
+            f"{len(small)} photo(s) are smaller than {MIN_PHOTO_WIDTH}x{MIN_PHOTO_HEIGHT}. The renderer enlarges them to "
+            "cover the frame and then zooms in, so they will look soft. Replace them with the full-size originals:",
+        ]
+        lines += [f"  {Path(path).name}" for path in small]
     demand = tag_demand(report)
     if demand:
         best = ", ".join(f"{tag} ({count})" for tag, count in demand[:8])

@@ -1,6 +1,6 @@
 # Qué grabar para el canal (y cómo entregarlo al bot)
 
-El código de las fases 3–7 ya está hecho: el bot arma el video, la metadata, la miniatura, pasa el quality gate y sube. Lo único que falta para producir de verdad es **tu material**: `assets/visuals/` está vacío y por eso `python main.py plan` no encuentra ninguna receta.
+El código de las fases 3–7 ya está hecho: el bot arma el video, la metadata, la miniatura, pasa el quality gate y sube. Lo que limita el canal es **tu material**. Al 2026-09-20 hay 5 fotos indexadas (ninguna llega a 1920x1080) y ningún clip de video, así que la mitad de las recetas no se pueden producir y las que sí salen con poca variedad.
 
 Para ver el estado en cualquier momento:
 
@@ -75,5 +75,5 @@ En `MODE=test` nada se sube; el video queda en `output/<video_id>/` con su `lice
 
 ## 4. Lo que sigue bloqueado por fuera del material
 
-- **Publicación automática**: esperando la respuesta de Google a la auditoría (ver `docs/YOUTUBE_AUDIT.md`). Hasta entonces, cada subida por API queda **privada**; se publica a mano desde Studio con un clic.
+- **Publicación automática**: desbloqueada — Google aprobó la auditoría el 2026-09-20. Para que el scheduler publique solo falta poner `MODE=production` en `.env`.
 - **Capas de audio con grabaciones reales** (pájaros, burbujeo del río, fuego con carácter): faltan las credenciales de Freesound. Sin ellas el bot usa solo síntesis procedural, que ya pasa el quality gate pero suena más plano en esas capas. Cuando quieras: crear cuenta en freesound.org → *Settings → API credentials → New credentials* y correr `python main.py freesound-auth`.
