@@ -101,7 +101,14 @@ def upload_ready(settings: Settings, engine, video_id: str) -> VideoState:
     now = datetime.now(UTC)
     if publish_at is not None:
         publish_at = publish_at if publish_at.tzinfo else publish_at.replace(tzinfo=UTC)
-        meta.publish_at = publish_at if publish_at > now + timedelta(minutes=15) else None
+        if publish_at > now + timedelta(minutes=15):
+            meta.publish_at = publish_at
+        else:
+            # The slot has passed (late production, catching up after a restart). Scheduling into
+            # the past is rejected and a plain private upload would never go live: publish it now.
+            meta.publish_at = None
+            meta.privacy_status = "public"
+            log.info("%s: publish time %s has passed; publishing on upload", video_id, publish_at.isoformat())
     try:
         response = upload_video(service, out / "video.mp4", meta, quota)
     except Exception as exc:

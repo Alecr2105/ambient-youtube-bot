@@ -142,3 +142,37 @@ def test_buffer_counts_existing_videos(env):
     assert dates_needing_videos(settings, engine, today) == [date(2026, 9, 14), date(2026, 9, 15), date(2026, 9, 16)]
     new_video(settings, engine, date(2026, 9, 15), "heavy_rain_window")
     assert dates_needing_videos(settings, engine, today) == [date(2026, 9, 14), date(2026, 9, 16)]
+
+
+def test_upload_schedules_ahead_and_publishes_at_once_when_the_slot_has_passed(env, monkeypatch):
+    """A video finished after its publish time must go live, not sit private forever."""
+    from datetime import UTC, datetime, timedelta
+
+    import app.youtube.auth as yt_auth
+    import app.youtube.uploader as yt_uploader
+    from app.scheduler.service import upload_ready
+    from app.utils.config import Mode
+
+    settings, engine = env
+    settings = settings.model_copy(update={"mode": Mode.PRODUCTION})
+    video_id = produce_for_day(settings, engine, date(2026, 9, 20), "heavy_rain_window")
+    sent = []
+
+    def fake_upload(service, path, meta, quota, **kw):
+        sent.append((meta.privacy_status, meta.publish_at))
+        return {"id": f"yt{len(sent)}", "status": {"privacyStatus": meta.privacy_status}}
+
+    monkeypatch.setattr(yt_auth, "load_credentials", lambda s: object())
+    monkeypatch.setattr(yt_auth, "build_service", lambda c: object())
+    monkeypatch.setattr(yt_uploader, "upload_video", fake_upload)
+    monkeypatch.setattr(yt_uploader, "set_thumbnail", lambda *a, **k: None)
+
+    for publish_at in (datetime.now(UTC) + timedelta(days=1), datetime.now(UTC) - timedelta(hours=1)):
+        with session_scope(engine) as session:
+            video = session.get(Video, video_id)
+            video.state, video.publish_at = VideoState.READY, publish_at
+        upload_ready(settings, engine, video_id)
+
+    (ahead_privacy, ahead_at), (late_privacy, late_at) = sent
+    assert ahead_privacy == "private" and ahead_at is not None  # YouTube makes it public at publishAt
+    assert late_privacy == "public" and late_at is None
