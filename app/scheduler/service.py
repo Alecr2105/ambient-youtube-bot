@@ -166,12 +166,17 @@ def daily_cycle(settings: Settings, engine) -> None:
         log.error("only %.0f GB free (min %.0f); not producing", free_gb, settings.min_free_disk_gb)
         return
     cleanup_outputs(settings, engine, today)
+    # Upload every video as soon as it is ready, not after the whole buffer is produced: on a
+    # catch-up (first start, a restart, a power cut) today's video would otherwise wait hours.
+    upload_ready_videos(settings, engine)
     with session_scope(engine) as session:
         unfinished = [v.id for v in session.scalars(select(Video).where(Video.state.not_in([VideoState.READY, VideoState.UPLOADING, VideoState.SCHEDULED, VideoState.PUBLISHED, VideoState.FAILED])))]
     for video_id in unfinished:
         run_production(settings, engine, video_id)
+        upload_ready_videos(settings, engine)
     for day in dates_needing_videos(settings, engine, today):
         produce_for_day(settings, engine, day)
+        upload_ready_videos(settings, engine)
     if settings.mode is Mode.PRODUCTION:
         try:
             from app.youtube.auth import build_service, load_credentials
@@ -181,14 +186,20 @@ def daily_cycle(settings: Settings, engine) -> None:
             log.info("youtube sync: %s", sync_status(build_service(load_credentials(settings)), engine, QuotaTracker(engine, settings)))
         except Exception as exc:
             log.warning("youtube status sync skipped: %s", exc)
-        with session_scope(engine) as session:
-            ready = [v.id for v in session.scalars(select(Video).where(Video.state == VideoState.READY).order_by(Video.target_publish_date))]
-        for video_id in ready:
-            try:
-                upload_ready(settings, engine, video_id)
-            except Exception as exc:
-                log.error("upload of %s failed: %s", video_id, exc)
-                break
+
+
+def upload_ready_videos(settings: Settings, engine) -> None:
+    """Uploads READY videos, earliest publish date first; stops at the first failure (quota, network)."""
+    if settings.mode is not Mode.PRODUCTION:
+        return
+    with session_scope(engine) as session:
+        ready = [v.id for v in session.scalars(select(Video).where(Video.state == VideoState.READY).order_by(Video.target_publish_date))]
+    for video_id in ready:
+        try:
+            upload_ready(settings, engine, video_id)
+        except Exception as exc:
+            log.error("upload of %s failed: %s", video_id, exc)
+            break
 
 
 def process_commands(settings: Settings, engine) -> None:

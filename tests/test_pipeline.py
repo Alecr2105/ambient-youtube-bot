@@ -195,3 +195,21 @@ def test_upload_schedules_ahead_and_publishes_at_once_when_the_slot_has_passed(e
     (ahead_privacy, ahead_at), (late_privacy, late_at) = sent
     assert ahead_privacy == "private" and ahead_at is not None  # YouTube makes it public at publishAt
     assert late_privacy == "public" and late_at is None
+
+
+def test_daily_cycle_uploads_each_video_as_soon_as_it_is_ready(make_settings, monkeypatch):
+    """On a catch-up (first start, restart, power cut) today's video must not wait for the whole buffer."""
+    from app.scheduler import service
+    from app.utils.config import Mode
+
+    settings = make_settings(mode=Mode.PRODUCTION, min_free_disk_gb=0)
+    upgrade_to_head(settings.database_url)
+    engine = make_engine(settings.database_url)
+    calls = []
+    monkeypatch.setattr(service, "cleanup_outputs", lambda *a: None)
+    monkeypatch.setattr(service, "dates_needing_videos", lambda s, e, today: [date(2026, 10, 5), date(2026, 10, 6)])
+    monkeypatch.setattr(service, "produce_for_day", lambda s, e, day: calls.append(f"produce {day}"))
+    monkeypatch.setattr(service, "upload_ready_videos", lambda s, e: calls.append("upload"))
+    service.daily_cycle(settings, engine)
+    engine.dispose()
+    assert calls == ["upload", "produce 2026-10-05", "upload", "produce 2026-10-06", "upload"]
