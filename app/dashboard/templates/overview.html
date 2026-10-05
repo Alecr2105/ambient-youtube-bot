@@ -41,7 +41,7 @@
   {% for v in upcoming %}
   <tr>
     <td><a href="/videos/{{ v.id }}">{{ v.id }}</a></td>
-    <td class="{% if v.state.value == 'FAILED' %}bad{% elif v.state.value in ('READY','SCHEDULED') %}ok{% endif %}">{{ v.state.value }}{% if v.failed_from_state %} <span class="muted">(en {{ v.failed_from_state.value }})</span>{% endif %}</td>
+    <td class="{% if v.state.value == 'FAILED' %}bad{% elif v.state.value in ('READY','SCHEDULED') %}ok{% endif %}">{{ v.state.value }}{% if uploading.get(v.id) is not none %} {{ uploading[v.id] }}%{% endif %}{% if v.failed_from_state %} <span class="muted">(en {{ v.failed_from_state.value }})</span>{% endif %}</td>
     <td>{{ v.target_publish_date }}</td>
     <td>{% if v.state.value == 'FAILED' %}<form class="inline" method="post" action="/commands/resume_video"><input type="hidden" name="video_id" value="{{ v.id }}"><button class="secondary">Reintentar</button></form>{% endif %}</td>
   </tr>

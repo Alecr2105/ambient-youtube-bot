@@ -213,3 +213,18 @@ def test_daily_cycle_uploads_each_video_as_soon_as_it_is_ready(make_settings, mo
     service.daily_cycle(settings, engine)
     engine.dispose()
     assert calls == ["upload", "produce 2026-10-05", "upload", "produce 2026-10-06", "upload"]
+
+
+def test_upload_progress_is_logged_in_steps_and_readable(tmp_path, caplog):
+    import logging
+
+    from app.scheduler.service import UploadProgress, upload_percent
+
+    assert upload_percent(str(tmp_path)) is None  # never started
+    with caplog.at_level(logging.INFO, logger="app.scheduler.service"):
+        progress = UploadProgress(tmp_path, "vid")
+        for fraction in (0.01, 0.03, 0.06, 0.07, 0.42, 0.99, 1.0):
+            progress(fraction)
+    logged = [r.getMessage() for r in caplog.records if "upload" in r.getMessage()]
+    assert logged == ["vid: upload 0%", "vid: upload 6%", "vid: upload 42%", "vid: upload 99%", "vid: upload 100%"]
+    assert upload_percent(str(tmp_path)) == 100

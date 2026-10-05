@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from app.database.models import ApiCost, Command, ErrorLog, License, Sound, StateLog, Video, Visual, YoutubeResult
 from app.database.session import make_engine, session_scope
 from app.database.states import VideoState
-from app.scheduler.service import is_paused
+from app.scheduler.service import is_paused, upload_percent
 from app.utils.config import PROJECT_ROOT, get_settings
 from app.utils.costs import UsageLedger
 from app.youtube.quota import QuotaTracker
@@ -50,6 +50,7 @@ def create_app(settings=None, env_path: Path | None = None) -> FastAPI:
         with session_scope(engine) as session:
             counts = dict(session.execute(select(Video.state, func.count()).group_by(Video.state)).all())
             upcoming = session.scalars(select(Video).where(Video.state.not_in([VideoState.PUBLISHED])).order_by(Video.target_publish_date).limit(10)).all()
+            uploading = {v.id: upload_percent(v.output_path) for v in upcoming if v.state is VideoState.UPLOADING}
             errors = session.scalars(select(ErrorLog).order_by(ErrorLog.id.desc()).limit(8)).all()
             commands = session.scalars(select(Command).order_by(Command.id.desc()).limit(6)).all()
             paused = is_paused(session)
@@ -57,7 +58,7 @@ def create_app(settings=None, env_path: Path | None = None) -> FastAPI:
         disk = shutil.disk_usage(settings.output_dir if settings.output_dir.exists() else PROJECT_ROOT).free / 1024**3
         return render(
             request, "overview.html",
-            counts={s.value: counts.get(s, 0) for s in VideoState}, upcoming=upcoming, errors=errors, commands=commands, paused=paused,
+            counts={s.value: counts.get(s, 0) for s in VideoState}, upcoming=upcoming, uploading=uploading, errors=errors, commands=commands, paused=paused,
             quota={b: (quota.used(b), quota.limits[b]) for b in ("uploads", "general", "search")},
             spend=(ledger.spent_today(), settings.daily_budget, ledger.spent_this_month(), settings.monthly_budget),
             disk_gb=disk, visuals=visuals,

@@ -333,11 +333,15 @@ def cmd_videos(_args: argparse.Namespace) -> int:
 
     from app.database.models import Video
     from app.database.session import session_scope
+    from app.database.states import VideoState
+    from app.scheduler.service import upload_percent
 
     with session_scope(_engine()) as session:
         for video in session.scalars(select(Video).order_by(Video.created_at.desc()).limit(30)):
             failed = f" (from {video.failed_from_state.value})" if video.failed_from_state else ""
-            print(f"{video.id:<40} {video.state.value:<22}{failed} publish {video.target_publish_date}")
+            percent = upload_percent(video.output_path) if video.state is VideoState.UPLOADING else None
+            uploading = f" {percent}%" if percent is not None else ""
+            print(f"{video.id:<40} {video.state.value + uploading:<22}{failed} publish {video.target_publish_date}")
     return 0
 
 

@@ -78,6 +78,39 @@ def produce_for_day(settings: Settings, engine, day: date, recipe_slug: str | No
     return None
 
 
+UPLOAD_PROGRESS_FILE = "upload_progress.json"
+
+
+class UploadProgress:
+    """Logs the upload every 5 % and keeps the latest figure next to the video, where
+    `main.py videos` and the dashboard read it (a 1-2 GB upload takes 20-40 minutes)."""
+
+    STEP = 5
+
+    def __init__(self, out: Path, video_id: str):
+        self.path, self.video_id, self.logged = out / UPLOAD_PROGRESS_FILE, video_id, -self.STEP
+        self(0.0)
+
+    def __call__(self, fraction: float) -> None:
+        percent = int(max(0.0, min(fraction, 1.0)) * 100)
+        if percent - self.logged < self.STEP and percent < 100:
+            return
+        self.logged = percent
+        log.info("%s: upload %d%%", self.video_id, percent)
+        self.path.write_text(json.dumps({"percent": percent, "updated_at": datetime.now(UTC).isoformat()}), encoding="utf-8")
+
+
+def upload_percent(output_path: str | None) -> int | None:
+    """Latest upload progress of a video, or None if it has never started uploading."""
+    if not output_path:
+        return None
+    path = Path(output_path) / UPLOAD_PROGRESS_FILE
+    try:
+        return int(json.loads(path.read_text(encoding="utf-8"))["percent"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def upload_ready(settings: Settings, engine, video_id: str) -> VideoState:
     from app.youtube.auth import build_service, load_credentials
     from app.youtube.quota import QuotaTracker
@@ -109,8 +142,10 @@ def upload_ready(settings: Settings, engine, video_id: str) -> VideoState:
             meta.publish_at = None
             meta.privacy_status = "public"
             log.info("%s: publish time %s has passed; publishing on upload", video_id, publish_at.isoformat())
+    progress = UploadProgress(out, video_id)
     try:
-        response = upload_video(service, out / "video.mp4", meta, quota)
+        response = upload_video(service, out / "video.mp4", meta, quota, progress=progress)
+        progress(1.0)
     except Exception as exc:
         with session_scope(engine) as session:
             transition(session, session.get(Video, video_id), VideoState.FAILED, f"upload: {exc}"[:2000])
