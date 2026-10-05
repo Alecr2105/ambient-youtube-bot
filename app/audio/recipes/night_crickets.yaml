@@ -7,15 +7,15 @@ costa_rica_eligible: true
 layers:
 - name: crickets
   library: {category: night_insects_texture, query: crickets night, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 12}
-  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15, gain_jitter_db: 0.75}
   gain_db: [-1, 0]
-  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-  intensity_depth_db: 1.5
+  automation: {depth_db: 1.0, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.0
   eq: {highpass_hz: 300}
 - name: forest
   library: {category: forest_night_texture, query: forest night, min_duration_s: 60, max_duration_s: 300, count: 3, pool_size: 10}
-  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15, gain_jitter_db: 0.75}
   gain_db: [-7, -4]
-  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-  intensity_depth_db: 1.5
+  automation: {depth_db: 1.0, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.0
   eq: {highpass_hz: 40, lowpass_hz: 6000}

@@ -94,6 +94,22 @@ def test_junction_click_is_detected(tmp_path):
     assert next(c for c in clean.checks if c.name == "junction_clicks").passed
 
 
+def test_one_natural_transient_at_a_junction_is_not_a_broken_splice(tmp_path):
+    """Real rain has heavy drops: one landing on one of hundreds of junctions is chance, not a click.
+    A splice that is actually broken clicks at many junctions and still fails."""
+    audio = at_loudness(brown(120, seed=7))
+    junctions = [float(t) for t in range(2, 118)]  # 116 junctions
+    hit = audio.copy()
+    hit[SR * 50 :] += 0.2  # one step at a single junction
+    broken = audio.copy()
+    for i, t in enumerate(junctions[::5]):  # a step at every fifth junction, alternating up and down
+        broken[int(SR * t) :] += 0.2 if i % 2 == 0 else -0.2
+    one = check_audio(write(tmp_path / "one.flac", hit), thresholds(), junctions_s=junctions)
+    many = check_audio(write(tmp_path / "many.flac", broken), thresholds(), junctions_s=junctions)
+    assert next(c for c in one.checks if c.name == "junction_clicks").passed
+    assert not next(c for c in many.checks if c.name == "junction_clicks").passed
+
+
 def calm_check(report):
     return next((c for c in report.checks if c.name == "calm_for_study"), None)
 

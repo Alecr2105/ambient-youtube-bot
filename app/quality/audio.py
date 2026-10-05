@@ -29,11 +29,11 @@ class AudioThresholds:
     loop_min_lag_s: float = 20.0
     loop_max_correlation: float = 0.35
     click_ratio: float = 2.5
+    #: Share of junctions allowed above click_ratio (random non-junction points: ~0.1 %).
+    max_click_share: float = 0.01
     #: Only for ambients meant for studying: how far the loudest 3 s may sit above the usual
     #: level. A thunder clap or a breaking wave pulls attention away from the page.
     max_short_term_jump_lu: float | None = None
-
-
 
 
 class _FeatureExtractor:
@@ -103,27 +103,42 @@ def longest_run(mask: np.ndarray) -> int:
     return int((changes[1::2] - changes[::2]).max())
 
 
+def _click_ratio(segment: np.ndarray, local: int, window: int, guard: int) -> float:
+    steps = np.abs(np.diff(segment, axis=0)).max(axis=1)
+    near = steps[max(local - window, 0) : local + window]
+    surroundings = np.concatenate([steps[: max(local - guard, 0)], steps[local + guard :]])
+    if not len(near) or not len(surroundings):
+        return 0.0
+    return float(near.max() / (np.percentile(surroundings, 99.9) + 1e-9))
+
+
 def junction_click_ratios(path: Path, junctions_s: list[float]) -> list[float]:
     """Largest sample step at each junction relative to the signal's own steps in the
     surrounding second. A splice inside broadband noise stays near 1 (inaudible); a jump
-    that stands out from the material scores well above it."""
-    ratios = []
+    that stands out from the material scores well above it.
+
+    The file is read once, front to back, in overlapping blocks. Seeking back and forth in a
+    FLAC made libsndfile fail now and then ("Internal psf_fseek() failed"), which failed a
+    whole production at random."""
     with sf.SoundFile(path) as f:
-        sr = f.samplerate
-        window = int(0.001 * sr)
-        guard = int(0.01 * sr)
+        sr, total = f.samplerate, f.frames
+        window, guard, span = int(0.001 * sr), int(0.01 * sr), 2 * sr
+        spans = []
         for junction in junctions_s:
             center = int(junction * sr)
             start = max(center - sr, 0)
-            f.seek(start)
-            steps = np.abs(np.diff(f.read(2 * sr, dtype="float64", always_2d=True), axis=0)).max(axis=1)
-            local = center - start
-            near = steps[max(local - window, 0) : local + window]
-            surroundings = np.concatenate([steps[: max(local - guard, 0)], steps[local + guard :]])
-            if not len(near) or not len(surroundings):
-                ratios.append(0.0)
-                continue
-            ratios.append(float(near.max() / (np.percentile(surroundings, 99.9) + 1e-9)))
+            spans.append((start, min(start + span, total), center))
+        ratios = [0.0] * len(spans)
+        pending = sorted(range(len(spans)), key=lambda i: spans[i][1])
+        block, overlap = max(60 * sr, 2 * span), span  # every 2 s window fits whole inside some block
+        position, k = 0, 0
+        for data in f.blocks(blocksize=block, overlap=overlap, dtype="float64", always_2d=True):
+            end = position + len(data)
+            while k < len(pending) and spans[pending[k]][1] <= end:
+                start, stop, center = spans[pending[k]]
+                ratios[pending[k]] = _click_ratio(data[start - position : stop - position], center - start, window, guard)
+                k += 1
+            position = end - overlap
     return ratios
 
 
@@ -187,9 +202,14 @@ def check_audio(path: Path, thresholds: AudioThresholds, junctions_s: list[float
     )
 
     if junctions_s:
-        ratios = junction_click_ratios(path, junctions_s)
-        worst = max(ratios)
-        report.add("junction_clicks", worst <= thresholds.click_ratio, worst, thresholds.click_ratio, f"{len(ratios)} junctions")
+        ratios = np.asarray(junction_click_ratios(path, junctions_s))
+        # Real recordings have their own transients (a heavy drop, a hailstone): measured at random
+        # points that are not junctions, about 0.1 % already exceed the ratio. With hundreds of
+        # junctions one of them lands on such a hit by chance. A broken splice clicks at many
+        # junctions, so the check fails on the share of junctions above the ratio, not on the worst.
+        share = float(np.mean(ratios > thresholds.click_ratio))
+        report.add("junction_clicks", share <= thresholds.max_click_share, round(share, 4), thresholds.max_click_share,
+                   f"{len(ratios)} junctions, worst ratio {ratios.max():.2f} (limit {thresholds.click_ratio})")
 
     report.metrics.update({"sample_rate": sr, "channels": info.channels, "frames": info.frames, "loop_lag_s": lag * FEATURE_HOP_S})
     return report
