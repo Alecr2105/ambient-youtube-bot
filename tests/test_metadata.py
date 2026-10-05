@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from app.audio.recipe import all_recipes, load_recipe
-from app.metadata.builder import build_metadata, build_tags
+from app.metadata.builder import build_metadata, build_tags, channel_focus
 from app.metadata.language import is_english_only, spanish_findings
 from app.metadata.titles import candidates, choose_title, duration_label, score_title
 from app.research.suggest import RankedTerm, SuggestClient, rank_terms
@@ -127,6 +127,24 @@ def test_description_says_truthfully_what_the_picture_is():
     assert "filmed" not in drawn.description and "Illustrated study scenes inspired by Costa Rica." in drawn.description
     assert "grabadas" not in drawn.localizations["es"]["description"]
     assert drawn.spanish_problems() == {}
+
+
+def test_channel_focus_is_the_most_weighted_use_the_recipe_offers():
+    weights = {"study": 0.5, "relaxation": 0.3, "sleep": 0.2}
+    assert channel_focus(["sleep", "relaxation", "study"], weights) == "study"
+    assert channel_focus(["sleep", "relaxation"], weights) == "relaxation"  # thunder is never sold for studying
+    assert channel_focus(["sleep"], {"study": 1.0}) is None
+
+
+def test_a_study_channel_titles_and_describes_its_videos_for_studying():
+    """Search volume favours "for sleep" on rain; a channel for studying must still say studying."""
+    recipe = load_recipe("heavy_rain_window")
+    plain = [build_metadata(recipe, 240, RESEARCH, [], seed=s, category_id="10", filmed_in_costa_rica=True) for s in range(4)]
+    study = [build_metadata(recipe, 240, RESEARCH, [], seed=s, category_id="10", filmed_in_costa_rica=True, focus="study")
+             for s in range(4)]
+    assert any("sleep" in m.title.lower() for m in plain)
+    assert all("study" in m.title.lower() or "studying" in m.title.lower() for m in study)
+    assert study[0].description.splitlines()[2].startswith("Use it for studying")
 
 
 def test_attribution_is_appended_when_given():

@@ -33,7 +33,7 @@ from app.database.states import PIPELINE_ORDER, VideoState
 from app.licensing.licenses import LicenseRecord
 from app.licensing.report import build_license_report
 from app.licensing.validator import LicenseValidator
-from app.metadata.builder import MetadataPackage, build_metadata
+from app.metadata.builder import MetadataPackage, build_metadata, channel_focus
 from app.metadata.preview import research_recipe
 from app.quality.audio import AudioThresholds, check_audio
 from app.quality.duplicates import Combination, check_duplicates, recent_concept_repeats
@@ -195,7 +195,8 @@ def stage_metadata(ctx: Context) -> dict:
     package = build_metadata(ctx.recipe, ctx.duration / 60, research, recent, ctx.seed, ctx.settings.youtube_category_id,
                              filmed_in_costa_rica=True, attribution=licenses["attribution_block"],
                              enable_es_localization=ctx.settings.enable_es_localization,
-                             visual_style=ctx.settings.visual_style.value)
+                             visual_style=ctx.settings.visual_style.value,
+                             focus=channel_focus(ctx.recipe.subniches, ctx.settings.subniche_weights))
     package.write(ctx.out / "metadata.json")
     return {"title": package.title}
 

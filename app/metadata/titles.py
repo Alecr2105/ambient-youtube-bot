@@ -99,7 +99,8 @@ def candidates(recipe: Recipe, minutes: float, research: list[RankedTerm], rng: 
     return pool
 
 
-def score_title(title: str, recipe: Recipe, research: list[RankedTerm], recent_titles: list[str]) -> ScoredTitle:
+def score_title(title: str, recipe: Recipe, research: list[RankedTerm], recent_titles: list[str],
+                focus: str | None = None) -> ScoredTitle:
     lower = title.lower()
     breakdown: dict[str, float] = {}
     if len(title) > MAX_TITLE or not is_english_only(title):
@@ -119,19 +120,24 @@ def score_title(title: str, recipe: Recipe, research: list[RankedTerm], recent_t
     breakdown["stuffing"] = -0.5 * max(0, repeats - 1) - 0.5 * max(0, sum(title.count(s.strip()) for s in SEPARATORS) - 1)
     if recipe.costa_rica_eligible and "costa rica" in lower:
         breakdown["differentiator"] = 0.6
+    if focus and any(p.lower() in lower for p in PURPOSES[focus]):
+        breakdown["focus"] = 1.0  # the channel's main use (e.g. studying) wins ties against search volume
 
     similarity = max((difflib.SequenceMatcher(None, lower, r.lower()).ratio() for r in recent_titles), default=0.0)
     breakdown["novelty"] = -5.0 if similarity >= SIMILARITY_LIMIT else -2.0 * max(0.0, similarity - 0.7)
     return ScoredTitle(title, round(sum(breakdown.values()), 3), {k: round(v, 3) for k, v in breakdown.items()})
 
 
-def choose_title(recipe: Recipe, minutes: float, research: list[RankedTerm], recent_titles: list[str], seed: int) -> tuple[ScoredTitle, list[ScoredTitle]]:
+def choose_title(recipe: Recipe, minutes: float, research: list[RankedTerm], recent_titles: list[str], seed: int,
+                 focus: str | None = None) -> tuple[ScoredTitle, list[ScoredTitle]]:
     rng = np.random.default_rng(np.random.SeedSequence([seed, 0x717]))
-    scored = [score_title(t, recipe, research, recent_titles) for t in candidates(recipe, minutes, research, rng)]
+    scored = [score_title(t, recipe, research, recent_titles, focus) for t in candidates(recipe, minutes, research, rng)]
     valid = sorted((s for s in scored if s.score >= 0 and s.breakdown.get("novelty", 0) > -5), key=lambda s: (-s.score, s.text))
     if not valid:
         raise ValueError("no valid title candidate (all too long, non-English or too similar to recent titles)")
-    # Pick among the best few so consecutive videos of the same recipe do not share a title.
-    top = valid[: min(3, len(valid))]
+    # Pick among the best few so consecutive videos of the same recipe do not share a title; with a
+    # focus (e.g. a study channel) only among titles that say it, never a sleep one by chance.
+    pool = [s for s in valid if s.breakdown.get("focus")] if focus else []
+    top = (pool or valid)[: min(3, len(pool or valid))]
     chosen = top[int(rng.integers(len(top)))]
     return chosen, valid

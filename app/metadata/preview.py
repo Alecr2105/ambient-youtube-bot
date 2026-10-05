@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from app.audio.recipe import Recipe
-from app.metadata.builder import MetadataPackage, build_metadata
+from app.metadata.builder import MetadataPackage, build_metadata, channel_focus
 from app.research.suggest import RankedTerm, SuggestClient, rank_terms
 from app.utils.config import Settings
 
@@ -25,4 +25,5 @@ def research_recipe(recipe: Recipe, settings: Settings) -> list[RankedTerm]:
 def preview_metadata(recipe: Recipe, minutes: float, settings: Settings, seed: int, use_research: bool, recent_titles: list[str] | None = None) -> MetadataPackage:
     research = research_recipe(recipe, settings) if use_research else []
     return build_metadata(recipe, minutes, research, recent_titles or [], seed, settings.youtube_category_id, filmed_in_costa_rica=True,
-                          visual_style=settings.visual_style.value)
+                          visual_style=settings.visual_style.value,
+                          focus=channel_focus(recipe.subniches, settings.subniche_weights))

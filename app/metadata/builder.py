@@ -43,6 +43,12 @@ class MetadataPackage:
         return {name: found for name, text in fields.items() if (found := spanish_findings(text))}
 
 
+def channel_focus(subniches: list[str], weights: dict[str, float]) -> str | None:
+    """The recipe's use the channel weighs most (SUBNICHE_WEIGHTS); titles and descriptions lead with it."""
+    ranked = sorted(subniches, key=lambda s: -weights.get(s, 0.0))  # stable: ties keep the recipe's order
+    return ranked[0] if ranked and weights.get(ranked[0], 0.0) > 0 else None
+
+
 #: What the description says about the picture. It has to be true: the owner's own footage and
 #: illustrated scenes are described differently, and nothing is claimed for anything else.
 VISUAL_LINES = {
@@ -52,9 +58,10 @@ VISUAL_LINES = {
 
 
 def build_description(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool, attribution: str,
-                      visual_style: str = "footage") -> str:
+                      visual_style: str = "footage", focus: str | None = None) -> str:
     duration = duration_label(minutes)
-    parts = [USES[s] for s in recipe.subniches]
+    ordered = sorted(recipe.subniches, key=lambda s: s != focus)  # the channel's main use first
+    parts = [USES[s] for s in ordered]
     uses = parts[0] if len(parts) == 1 else "; ".join(parts[:-1]) + "; or " + parts[-1]
     lines = [
         f"{recipe.name} — {duration} of continuous ambience with no music and no talking.",
@@ -127,11 +134,13 @@ def build_metadata(
     attribution: str = "",
     enable_es_localization: bool = False,
     visual_style: str = "footage",
+    focus: str | None = None,
 ) -> MetadataPackage:
-    chosen, ranked = choose_title(recipe, minutes, research, recent_titles, seed)
+    chosen, ranked = choose_title(recipe, minutes, research, recent_titles, seed, focus)
     package = MetadataPackage(
         title=chosen.text,
-        description=build_description(recipe, minutes, filmed_in_costa_rica and recipe.costa_rica_eligible, attribution, visual_style),
+        description=build_description(recipe, minutes, filmed_in_costa_rica and recipe.costa_rica_eligible, attribution,
+                                      visual_style, focus),
         tags=build_tags(recipe, research, filmed_in_costa_rica and recipe.costa_rica_eligible, minutes),
         category_id=category_id,
         default_language="en",
