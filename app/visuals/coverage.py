@@ -22,8 +22,8 @@ from app.visuals.matcher import MAX_VISUALS
 COMFORTABLE_SECONDS = 600.0
 COMFORTABLE_CLIPS = 2
 
-# The renderer scales every visual to *cover* the output frame and then applies a slow zoom,
-# so anything smaller than the frame is enlarged twice over and looks soft for hours.
+# The renderer scales every visual to *cover* the output frame (and with VISUAL_MOTION=full
+# zooms in on top of that), so anything smaller than the frame is enlarged and looks soft for hours.
 MIN_PHOTO_WIDTH = 1920
 MIN_PHOTO_HEIGHT = 1080
 
@@ -118,8 +118,8 @@ def render_report(report: list[RecipeCoverage], visuals_dir: str) -> str:
     if small:
         lines += [
             "",
-            f"{len(small)} photo(s) are smaller than {MIN_PHOTO_WIDTH}x{MIN_PHOTO_HEIGHT}. The renderer enlarges them to "
-            "cover the frame and then zooms in, so they will look soft. Replace them with the full-size originals:",
+            f"{len(small)} picture(s) are smaller than {MIN_PHOTO_WIDTH}x{MIN_PHOTO_HEIGHT}. The renderer enlarges them to "
+            "cover the frame, so they will look softer. Replace them with larger versions when you can:",
         ]
         lines += [f"  {Path(path).name}" for path in small]
     demand = tag_demand(report)

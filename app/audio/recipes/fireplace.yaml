@@ -1,13 +1,30 @@
-﻿slug: fireplace
+slug: fireplace
 name: Cozy Fireplace
 subniches: [relaxation, study, sleep]
 keywords: [fireplace sounds, crackling fire, cozy fireplace ambience, fireplace for sleeping, cozy cabin]
 visual_tags: [fire, fireplace, cabin]
 costa_rica_eligible: false
 layers:
+  - name: fire_texture
+    source: library
+    library:
+      category: fireplace_texture
+      query: fireplace
+      min_duration_s: 60
+      max_duration_s: 300
+      count: 2
+      pool_size: 8
+    generator: fire
+    params: {crackles_per_second: [10, 26], pops_per_minute: [4, 12], crackle_level: [0.55, 0.85], roar_level: [0.3, 0.5]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-2, 0]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 40}
   - name: fire
     generator: fire
     params: {crackles_per_second: [10, 26], pops_per_minute: [4, 12], crackle_level: [0.55, 0.85], roar_level: [0.3, 0.5]}
+    gain_db: [-8, -5]
     automation: {depth_db: 1.5, min_period_s: 30, max_period_s: 150}
     intensity_depth_db: 2.0
     eq: {highpass_hz: 40}

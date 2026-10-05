@@ -1,5 +1,7 @@
 # Qué grabar para el canal (y cómo entregarlo al bot)
 
+> **2026-10-04 — cambio de concepto:** el canal ahora usa **escenas lofi ilustradas de Costa Rica** en vez de footage propio (ver `docs/ANALYSIS.md`). Para ilustraciones valen los mismos requisitos de abajo: **16:9, 1920×1080 o más, sin texto en español, sin logos ni marcas**. Escenas que hoy faltan y desbloquean recetas: **cabaña con chimenea** (fuego), **estudiar junto a un río** (río), **catarata**, **lluvia sobre techo de zinc**, y la **selva de noche sin el logo de Apple** en la laptop.
+
 El código de las fases 3–7 ya está hecho: el bot arma el video, la metadata, la miniatura, pasa el quality gate y sube. Lo que limita el canal es **tu material**. Al 2026-09-20 hay 5 fotos indexadas (ninguna llega a 1920x1080) y ningún clip de video, así que la mitad de las recetas no se pueden producir y las que sí salen con poca variedad.
 
 Para ver el estado en cualquier momento:

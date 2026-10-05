@@ -1,13 +1,30 @@
-﻿slug: waterfall
+slug: waterfall
 name: Waterfall
 subniches: [relaxation, study, sleep]
 keywords: [waterfall sounds, waterfall white noise, nature sounds for sleeping, jungle waterfall, relaxing water sounds]
 visual_tags: [waterfall, jungle, forest]
 costa_rica_eligible: true
 layers:
+  - name: falls_texture
+    source: library
+    library:
+      category: waterfall_texture
+      query: waterfall
+      min_duration_s: 60
+      max_duration_s: 300
+      count: 2
+      pool_size: 8
+    generator: waterfall
+    params: {roar_level: [0.85, 1.0], body_level: [0.45, 0.75], spray_level: [0.2, 0.4]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-2, 0]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 35}
   - name: falls
     generator: waterfall
     params: {roar_level: [0.85, 1.0], body_level: [0.45, 0.75], spray_level: [0.2, 0.4]}
+    gain_db: [-8, -5]
     automation: {depth_db: 0.8, min_period_s: 60, max_period_s: 300}
     intensity_depth_db: 1.0
   - name: pool

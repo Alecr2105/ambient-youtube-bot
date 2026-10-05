@@ -94,6 +94,30 @@ def test_junction_click_is_detected(tmp_path):
     assert next(c for c in clean.checks if c.name == "junction_clicks").passed
 
 
+def calm_check(report):
+    return next((c for c in report.checks if c.name == "calm_for_study"), None)
+
+
+def test_study_ambient_rejects_a_startling_burst(tmp_path):
+    """A thunder clap or a breaking wave is fine for sleep and wrong for studying."""
+    audio = at_loudness(modulated(60, seed=7))
+    startling = audio.copy()
+    startling[SR * 30 : SR * 33] *= 10 ** (12 / 20)  # three loud seconds in the middle
+
+    steady = check_audio(write(tmp_path / "steady.flac", audio), thresholds(max_short_term_jump_lu=5.0))
+    burst = check_audio(write(tmp_path / "burst.flac", startling), thresholds(max_short_term_jump_lu=5.0))
+
+    assert calm_check(steady).passed and calm_check(steady).value < 5.0
+    assert not calm_check(burst).passed and calm_check(burst).value > 5.0
+
+
+def test_calmness_is_only_checked_when_the_ambient_is_offered_for_studying(tmp_path):
+    audio = at_loudness(modulated(60, seed=7))
+    audio[SR * 30 : SR * 33] *= 10 ** (12 / 20)
+    report = check_audio(write(tmp_path / "sleep.flac", audio), thresholds())
+    assert calm_check(report) is None
+
+
 def test_longest_run():
     assert longest_run(np.array([0, 1, 1, 0, 1, 1, 1, 0], dtype=bool)) == 3
     assert longest_run(np.zeros(5, dtype=bool)) == 0

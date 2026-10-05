@@ -43,7 +43,16 @@ class MetadataPackage:
         return {name: found for name, text in fields.items() if (found := spanish_findings(text))}
 
 
-def build_description(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool, attribution: str) -> str:
+#: What the description says about the picture. It has to be true: the owner's own footage and
+#: illustrated scenes are described differently, and nothing is claimed for anything else.
+VISUAL_LINES = {
+    "footage": "All footage was filmed on location in Costa Rica by the channel.",
+    "illustrated": "Illustrated study scenes inspired by Costa Rica.",
+}
+
+
+def build_description(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool, attribution: str,
+                      visual_style: str = "footage") -> str:
     duration = duration_label(minutes)
     parts = [USES[s] for s in recipe.subniches]
     uses = parts[0] if len(parts) == 1 else "; ".join(parts[:-1]) + "; or " + parts[-1]
@@ -53,7 +62,7 @@ def build_description(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool
         f"Use it for {uses}. Let it play in the background, turn the screen off, and let the sound do the work.",
     ]
     if filmed_in_costa_rica:
-        lines += ["", "All footage was filmed on location in Costa Rica by the channel. Every video is mixed individually, so no two are the same."]
+        lines += ["", f"{VISUAL_LINES[visual_style]} Every video is mixed individually, so no two are the same."]
     else:
         lines += ["", "Every video is mixed individually, so no two are the same."]
     lines += ["", "If this helped you sleep, study or unwind, subscribe for a new ambience every day."]
@@ -86,7 +95,14 @@ def build_tags(recipe: Recipe, research: list[RankedTerm], filmed_in_costa_rica:
 PURPOSE_ES = {"sleep": "dormir profundamente", "study": "estudiar y concentrarse", "relaxation": "relajarse y meditar"}
 
 
-def spanish_localization(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool) -> dict[str, dict[str, str]]:
+VISUAL_LINES_ES = {
+    "footage": "Imágenes grabadas en Costa Rica por el canal.",
+    "illustrated": "Escenas ilustradas inspiradas en Costa Rica.",
+}
+
+
+def spanish_localization(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool,
+                         visual_style: str = "footage") -> dict[str, dict[str, str]]:
     """Alternate 'es' track (YouTube shows it to Spanish-language viewers). Main fields stay English."""
     if not recipe.name_es:
         return {}
@@ -96,7 +112,7 @@ def spanish_localization(recipe: Recipe, minutes: float, filmed_in_costa_rica: b
     title = f"{recipe.name_es} para {purpose} | {duration}"[:100]
     lines = [f"{recipe.name_es}: {duration} de ambiente continuo, sin música y sin voces.", "", f"Ideal para {purpose}."]
     if filmed_in_costa_rica and recipe.costa_rica_eligible:
-        lines += ["", "Imágenes grabadas en Costa Rica por el canal."]
+        lines += ["", VISUAL_LINES_ES[visual_style]]
     return {"es": {"title": title, "description": "\n".join(lines)}}
 
 
@@ -110,18 +126,19 @@ def build_metadata(
     filmed_in_costa_rica: bool,
     attribution: str = "",
     enable_es_localization: bool = False,
+    visual_style: str = "footage",
 ) -> MetadataPackage:
     chosen, ranked = choose_title(recipe, minutes, research, recent_titles, seed)
     package = MetadataPackage(
         title=chosen.text,
-        description=build_description(recipe, minutes, filmed_in_costa_rica and recipe.costa_rica_eligible, attribution),
+        description=build_description(recipe, minutes, filmed_in_costa_rica and recipe.costa_rica_eligible, attribution, visual_style),
         tags=build_tags(recipe, research, filmed_in_costa_rica and recipe.costa_rica_eligible, minutes),
         category_id=category_id,
         default_language="en",
         default_audio_language="en",
         title_candidates=[{"text": s.text, "score": s.score, "breakdown": s.breakdown} for s in ranked[:10]],
         research_terms=[{"term": t.term, "score": t.score, "sources": list(t.sources)} for t in research[:30]],
-        localizations=spanish_localization(recipe, minutes, filmed_in_costa_rica) if enable_es_localization else {},
+        localizations=spanish_localization(recipe, minutes, filmed_in_costa_rica, visual_style) if enable_es_localization else {},
     )
     problems = package.spanish_problems()
     if problems:

@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from app.utils.ffmpeg import EncoderChoice
-from app.video.plan import SegmentVariant, Timeline
+from app.video.plan import STILL, SegmentVariant, Timeline
 from app.video.probe import probe
 
 log = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ class VideoFormat:
     bitrate: str
     audio_codec: str
     audio_bitrate: str
+    still: bool = False  # nothing moves: fewer keyframes are needed and the bitrate can be much lower
 
 
 @dataclass
@@ -57,7 +58,8 @@ def _bitrate_bps(value: str) -> int:
 
 def encode_args(encoder: EncoderChoice, fmt: VideoFormat, key_times: list[float]) -> list[str]:
     bps = _bitrate_bps(fmt.bitrate)
-    common = ["-pix_fmt", "yuv420p", "-r", str(fmt.fps), "-g", str(fmt.fps * 2), "-bf", "0"]
+    gop = fmt.fps * (10 if fmt.still else 2)  # a still picture does not need a keyframe every 2 s
+    common = ["-pix_fmt", "yuv420p", "-r", str(fmt.fps), "-g", str(gop), "-bf", "0"]
     if key_times:
         common += ["-force_key_frames", ",".join(f"{t:.3f}" for t in key_times)]
     rate = ["-b:v", str(bps), "-maxrate", str(int(bps * 1.5)), "-bufsize", str(bps * 2)]
@@ -132,14 +134,20 @@ def segment_command(ffmpeg: Path, variant: SegmentVariant, edge: float, fmt: Vid
         offset += variant.pieces[i].duration
 
     m, g = variant.motion, variant.grade
-    zoom = f"{m.zoom_base:.4f}+{m.zoom_amplitude:.4f}*sin(2*PI*it/{m.zoom_period:.2f}+{m.zoom_phase:.3f})"
-    pan_x = f"iw/2-(iw/zoom/2)+{m.pan_x:.2f}*sin(2*PI*it/{m.pan_period:.2f}+{m.pan_phase:.3f})"
-    pan_y = f"ih/2-(ih/zoom/2)+{m.pan_y:.2f}*cos(2*PI*it/{m.pan_period:.2f}+{m.pan_phase:.3f})"
-    parts.append(
-        f"[{current}]trim=duration={variant.length:.3f},"
-        f"zoompan=z='{zoom}':x='{pan_x}':y='{pan_y}':d=1:s={w}x{h}:fps={fps},"
-        f"eq=brightness={g.brightness:.4f}:contrast={g.contrast:.4f}:saturation={g.saturation:.4f}:gamma_r={g.gamma_r:.4f}:gamma_b={g.gamma_b:.4f}[graded]"
-    )
+    grade = (f"eq=brightness={g.brightness:.4f}:contrast={g.contrast:.4f}:saturation={g.saturation:.4f}:"
+             f"gamma_r={g.gamma_r:.4f}:gamma_b={g.gamma_b:.4f}")
+    if m == STILL:
+        # No zoompan at all: a photo the size of the frame is never resampled, so it stays sharp.
+        parts.append(f"[{current}]trim=duration={variant.length:.3f},{grade}[graded]")
+    else:
+        zoom = f"{m.zoom_base:.4f}+{m.zoom_amplitude:.4f}*sin(2*PI*it/{m.zoom_period:.2f}+{m.zoom_phase:.3f})"
+        pan_x = f"iw/2-(iw/zoom/2)+{m.pan_x:.2f}*sin(2*PI*it/{m.pan_period:.2f}+{m.pan_phase:.3f})"
+        pan_y = f"ih/2-(ih/zoom/2)+{m.pan_y:.2f}*cos(2*PI*it/{m.pan_period:.2f}+{m.pan_phase:.3f})"
+        parts.append(
+            f"[{current}]trim=duration={variant.length:.3f},"
+            f"zoompan=z='{zoom}':x='{pan_x}':y='{pan_y}':d=1:s={w}x{h}:fps={fps},"
+            f"{grade}[graded]"
+        )
     parts.append(f"[graded][{vignette_index}:v]overlay=format=auto:shortest=1,format=yuv420p[v]")
 
     cmd += ["-filter_complex", ";".join(parts), "-map", "[v]", "-t", f"{variant.length:.3f}", "-an"]

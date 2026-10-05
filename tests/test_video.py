@@ -13,7 +13,7 @@ from app.database.models import Visual
 from app.database.session import make_engine, session_scope
 from app.quality.video import VideoThresholds, check_video
 from app.utils import ffmpeg
-from app.video.plan import plan_timeline, plan_variants
+from app.video.plan import STILL, is_still, plan_timeline, plan_variants
 from app.visuals.indexer import index_visuals, tags_from_name
 from app.visuals.matcher import NoMatchingVisualsError, VisualChoice, choose_visuals, score_visual
 
@@ -81,6 +81,31 @@ def test_images_get_a_single_ken_burns_piece():
     variant = plan_variants([image], 1, 60, 4, seed=1, sleep=False)[0]
     assert len(variant.pieces) == 1 and variant.pieces[0].is_image
     assert variant.motion.zoom_amplitude >= 0.04
+
+
+def photo_choice(path: str) -> VisualChoice:
+    return VisualChoice(abs(hash(path)) % 1000, path, "image", None, 1920, 1080, False, ("ocean",), 5.0)
+
+
+def test_still_variants_have_no_motion_and_a_single_look():
+    photos = [photo_choice(f"{n}.jpg") for n in "abc"]
+    variants = plan_variants(photos, 4, 120, 4, seed=7, sleep=True, moving=False)
+    assert is_still(variants) and all(v.motion == STILL for v in variants)
+    # One grade for the whole video: no brightness step between segments, and no sleep ramp.
+    assert len({v.grade for v in variants}) == 1
+    assert not is_still(plan_variants(photos, 4, 120, 4, seed=7, sleep=True))
+
+
+def test_footage_is_never_treated_as_a_still_picture():
+    variants = plan_variants([video_choice()], 2, 120, 4, seed=7, sleep=False, moving=False)
+    assert all(v.motion == STILL for v in variants) and not is_still(variants)
+
+
+def test_each_segment_takes_a_different_photo_before_repeating_any():
+    photos = [photo_choice(f"{n}.jpg") for n in "abcd"]
+    used = [v.pieces[0].path for v in plan_variants(photos, 6, 120, 4, seed=11, sleep=False, moving=False)]
+    assert len(set(used[:4])) == 4  # all four photos before any of them comes back
+    assert max(used.count(path) for path in set(used)) == 2
 
 
 # --- indexing and matching -------------------------------------------------

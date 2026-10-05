@@ -22,6 +22,17 @@ RISK_PATTERNS = [
     r"\btalking\b", r"\bpeople\b", r"\bcrowd\b", r"\bradio\b", r"\bgame\b", r"sample pack", r"\bsfx library\b",
     r"\bapp\b", r"\bsynth(esized)?\b", r"\bgenerated\b", r"\bai\b",
 ]
+# Sounds that are legitimately CC0 but wrong for a nature ambience: a rain recording whose
+# description mentions city traffic and a siren is a rain recording with traffic and a siren in it.
+NOISE_PATTERNS = [
+    r"\btraffic\b", r"\bsirens?\b", r"\bcars?\b", r"\btrucks?\b", r"\bbuses\b", r"\bbus\b", r"\bmotorcycles?\b",
+    r"\bmopeds?\b", r"\bengines?\b", r"\bmotors?\b", r"\bhorns?\b", r"\bair ?planes?\b", r"\bplanes?\b",
+    r"\bjets?\b", r"\bhelicopters?\b", r"\btrains?\b", r"\bsubway\b", r"\bmetro\b", r"\bcity\b", r"\burban\b",
+    r"\bstreets?\b", r"\bhighways?\b", r"\broad ?noise\b", r"\bconstruction\b", r"\bdrill(ing)?\b",
+    r"\bjackhammer\b", r"\bchainsaws?\b", r"\blawn ?mowers?\b", r"\bmachines?\b", r"\bgenerators?\b",
+    r"\balarms?\b", r"\bbells?\b", r"\bfireworks?\b", r"\bgun ?shots?\b", r"\bdogs? bark\b", r"\bbarking\b",
+]
+
 LOSSLESS_TYPES = {"wav", "flac", "aiff", "aif"}
 MIN_DESCRIPTION_CHARS = 20
 
@@ -34,6 +45,12 @@ class ProvenanceVerdict:
 
     def summary(self) -> str:
         return f"score={self.score:.2f}; " + "; ".join(self.notes)
+
+
+def unwanted_content(candidate: SoundCandidate) -> list[str]:
+    """Man-made sounds named in the metadata. Nature ambience has to be free of them."""
+    text = " ".join([candidate.name, candidate.description, " ".join(candidate.tags)]).lower()
+    return [re.sub(r"\\b|[()?]", "", p) for p in NOISE_PATTERNS if re.search(p, text)]
 
 
 def assess_metadata(candidate: SoundCandidate, min_sample_rate: int = 44100) -> ProvenanceVerdict:

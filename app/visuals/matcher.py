@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from app.database.models import Visual
 
 MAX_VISUALS = 3
+# Photos bring no movement of their own, so changing picture is the only variety a video has:
+# when there is no footage to cut, use more of them.
+MAX_IMAGE_VISUALS = 8
 
 
 class NoMatchingVisualsError(RuntimeError):
@@ -43,7 +46,7 @@ def score_visual(visual: Visual, wanted: set[str], now: datetime) -> float:
     return score
 
 
-def choose_visuals(session: Session, visual_tags: list[str], now: datetime | None = None, limit: int = MAX_VISUALS) -> list[VisualChoice]:
+def choose_visuals(session: Session, visual_tags: list[str], now: datetime | None = None, limit: int | None = None) -> list[VisualChoice]:
     now = now or datetime.now(UTC)
     wanted = {t.lower() for t in visual_tags}
     rows = session.scalars(select(Visual).where(Visual.missing.is_(False))).all()
@@ -52,7 +55,7 @@ def choose_visuals(session: Session, visual_tags: list[str], now: datetime | Non
     if not matches:
         raise NoMatchingVisualsError(f"no indexed visual matches tags {sorted(wanted)}")
     videos = [(s, v) for s, v in matches if v.type == "video"]
-    picked = (videos or matches)[:limit]
+    picked = videos[: limit or MAX_VISUALS] if videos else matches[: limit or MAX_IMAGE_VISUALS]
     return [
         VisualChoice(v.id, v.path, v.type, v.duration, v.width, v.height, v.allow_mirror, tuple(v.tags), s)
         for s, v in picked

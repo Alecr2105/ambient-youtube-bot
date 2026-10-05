@@ -15,8 +15,8 @@ from app.database.session import make_engine, session_scope
 from app.quality.video import VideoThresholds, check_video
 from app.quality.report import QualityReport
 from app.utils import ffmpeg
-from app.utils.config import Settings
-from app.video.plan import plan_timeline, plan_variants
+from app.utils.config import Settings, VisualMotion
+from app.video.plan import is_still, plan_timeline, plan_variants
 from app.video.render import VideoFormat, render_video
 from app.visuals.matcher import choose_visuals, mark_used
 
@@ -57,16 +57,20 @@ def produce_video(
     with session_scope(engine) as session:
         visuals = choose_visuals(session, recipe.visual_tags)
     sleep = recipe.subniches[0] == "sleep"
+    moving = settings.visual_motion is not VisualMotion.OFF
     body, variant_count = variant_plan_for(duration, body_s, variants)
-    plan = plan_variants(visuals, variant_count, body, EDGE_S, seed, sleep)
+    plan = plan_variants(visuals, variant_count, body, EDGE_S, seed, sleep, moving=moving)
+    still = is_still(plan)
     timeline = plan_timeline(duration, body, EDGE_S, variant_count, seed, sleep)
     (out_dir / "visual_plan.json").write_text(
         json.dumps({"visuals": [asdict(v) for v in visuals], "timeline": timeline.order, "body_s": body, "edge_s": EDGE_S,
                     "variants": [asdict(v) for v in plan], "encoder": encoder.name}, indent=2),
         encoding="utf-8",
     )
-    fmt = VideoFormat(settings.width, settings.height, settings.fps, settings.video_bitrate, settings.audio_codec, settings.audio_bitrate)
-    log.info("rendering %.0f s video: %d variants x %.0f s, %d timeline slots, encoder %s", duration, variant_count, body, len(timeline.order), encoder.name)
+    bitrate = settings.static_video_bitrate if still else settings.video_bitrate
+    fmt = VideoFormat(settings.width, settings.height, settings.fps, bitrate, settings.audio_codec, settings.audio_bitrate, still=still)
+    log.info("rendering %.0f s video: %d variants x %.0f s, %d timeline slots, encoder %s, %s at %s",
+             duration, variant_count, body, len(timeline.order), encoder.name, "still" if still else "moving", bitrate)
 
     started = time.perf_counter()
     result = render_video(binary, probe_bin, plan, timeline, audio, duration, fmt, encoder, settings.work_dir / f"video_{run_id}", out_dir / "video.mp4", settings.cache_dir)

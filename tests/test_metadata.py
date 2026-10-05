@@ -117,6 +117,18 @@ def test_spanish_localization_is_opt_in_and_never_touches_main_fields():
     assert body["localizations"]["es"]["title"] == on.localizations["es"]["title"]
 
 
+def test_description_says_truthfully_what_the_picture_is():
+    """With illustrated scenes the description must not claim the footage was filmed by the channel."""
+    recipe = load_recipe("gentle_rain").model_copy(update={"name_es": "Lluvia suave"})
+    footage = build_metadata(recipe, 180, [], [], seed=1, category_id="10", filmed_in_costa_rica=True)
+    drawn = build_metadata(recipe, 180, [], [], seed=1, category_id="10", filmed_in_costa_rica=True,
+                           enable_es_localization=True, visual_style="illustrated")
+    assert "filmed on location" in footage.description
+    assert "filmed" not in drawn.description and "Illustrated study scenes inspired by Costa Rica." in drawn.description
+    assert "grabadas" not in drawn.localizations["es"]["description"]
+    assert drawn.spanish_problems() == {}
+
+
 def test_attribution_is_appended_when_given():
     recipe = load_recipe("river_stream")
     package = build_metadata(recipe, 180, [], [], seed=1, category_id="10", filmed_in_costa_rica=True, attribution="Sound credits (from freesound.org):\n\"Creek\" by rec")

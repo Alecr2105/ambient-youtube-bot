@@ -29,6 +29,24 @@ class AudioThresholds:
     loop_min_lag_s: float = 20.0
     loop_max_correlation: float = 0.35
     click_ratio: float = 2.5
+    #: Only for ambients meant for studying: how far the loudest 3 s may sit above the usual
+    #: level. A thunder clap or a breaking wave pulls attention away from the page.
+    max_short_term_jump_lu: float | None = None
+
+
+SHORT_TERM_WINDOW_S = 3.0
+
+
+def short_term_loudness(meter: LoudnessMeter, window_s: float = SHORT_TERM_WINDOW_S) -> np.ndarray:
+    """BS.1770-4 short-term loudness (sliding `window_s`, 100 ms hop) from a fed meter."""
+    energy = np.asarray(meter.segment_energy)
+    window = int(round(window_s / 0.1))
+    if len(energy) < window:
+        return np.array([])
+    mean = np.convolve(energy, np.ones(window), mode="valid") / (window * meter.segment)
+    with np.errstate(divide="ignore"):
+        values = -0.691 + 10 * np.log10(mean)
+    return values[np.isfinite(values)]
 
 
 class _FeatureExtractor:
@@ -155,6 +173,17 @@ def check_audio(path: Path, thresholds: AudioThresholds, junctions_s: list[float
     tp_limit = thresholds.max_true_peak_dbtp + thresholds.true_peak_tolerance_db
     report.add("true_peak", true_peak <= tp_limit, true_peak, tp_limit)
     report.add("clipping", clipped == 0, clipped, 0, "samples at full scale")
+
+    if thresholds.max_short_term_jump_lu is not None:
+        values = short_term_loudness(loudness)
+        # Drop the fade in and out: they are quiet by design and would dominate the spread.
+        skip = int(thresholds.ignore_edges_s / 0.1)
+        inner_st = values[skip : len(values) - skip] if len(values) > 2 * skip + 10 else values
+        jump = float(inner_st.max() - np.median(inner_st)) if inner_st.size else 0.0
+        report.add(
+            "calm_for_study", jump <= thresholds.max_short_term_jump_lu, round(jump, 2),
+            thresholds.max_short_term_jump_lu, "loudest 3 s above the usual level (LU)",
+        )
 
     rms_db = features.rms_db()
     edge = int(thresholds.ignore_edges_s / SILENCE_FRAME_S)

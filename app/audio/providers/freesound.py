@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.audio.providers.base import FetchedSound, ProviderUnavailableError, SoundCandidate, SoundQuery
+from app.audio.providers.base import FetchedSound, ProviderUnavailableError, SoundCandidate, SoundQuery, SoundUnusableError
 from app.audio.providers.normalize import normalize_to_flac, sha256_file
 from app.licensing.licenses import CANONICAL_URLS, LicenseRecord, normalize_license
 from app.utils.config import LicenseType
@@ -27,12 +27,25 @@ log = logging.getLogger(__name__)
 API = "https://freesound.org/apiv2"
 AUTHORIZE_URL = f"{API}/oauth2/authorize/"
 TOKEN_URL = f"{API}/oauth2/access_token/"
-FIELDS = "id,name,tags,description,username,license,url,type,samplerate,channels,duration,num_downloads,avg_rating,num_ratings"
+FIELDS = "id,name,tags,description,username,license,url,type,samplerate,channels,duration,filesize,num_downloads,avg_rating,num_ratings"
 PER_MINUTE = 60
 PER_DAY = 2000
 PAGE_SIZE = 50
+# A 5-minute original at 96 kHz can be 500 MB, and downloading one pool took 23 minutes.
+# The program is rendered at 48 kHz, so nothing above that is worth the wait.
+MAX_FILESIZE_BYTES = 60_000_000
+MAX_SAMPLE_RATE = 48000
 
 Transport = Callable[[urllib.request.Request], bytes]
+
+
+def broaden(text: str) -> list[str]:
+    """Freesound's text search requires every word to match, so a long phrase often returns
+    nothing at all ("rain on window glass" has no results; "rain window" has hundreds).
+    Try the phrase as written, then its two strongest words, then just the first one."""
+    words = text.split()
+    tries = [text, " ".join(words[:2]), words[0]] if words else []
+    return list(dict.fromkeys(t for t in tries if t))
 
 
 def default_transport(request: urllib.request.Request) -> bytes:
@@ -98,14 +111,24 @@ class FreesoundProvider:
     def search(self, query: SoundQuery) -> list[SoundCandidate]:
         if not self.configured:
             raise ProviderUnavailableError("FREESOUND_API_KEY not set")
+        for text in broaden(query.text):
+            found = self._search_once(text, query)
+            if found:
+                if text != query.text:
+                    log.info("freesound: %r found nothing, used %r instead", query.text, text)
+                return found
+        return []
+
+    def _search_once(self, text: str, query: SoundQuery) -> list[SoundCandidate]:
         params = {
-            "query": query.text,
-            "filter": f'license:"Creative Commons 0" duration:[{query.min_duration_s:g} TO {query.max_duration_s:g}]',
+            "query": text,
+            "filter": (f'license:"Creative Commons 0" duration:[{query.min_duration_s:g} TO {query.max_duration_s:g}] '
+                       f"filesize:[0 TO {MAX_FILESIZE_BYTES}] samplerate:[44100 TO {MAX_SAMPLE_RATE}]"),
             "sort": "rating_desc",
             "fields": FIELDS,
             "page_size": str(PAGE_SIZE),
         }
-        request = urllib.request.Request(f"{API}/search/?{urllib.parse.urlencode(params)}", headers={"Authorization": f"Token {self.api_key}"})
+        request = urllib.request.Request(f"{API}/search/text/?{urllib.parse.urlencode(params)}", headers={"Authorization": f"Token {self.api_key}"})
         data = json.loads(self._call("search", request))
         return [self._candidate(item) for item in data.get("results", []) if str(item["id"]) not in query.exclude_ids]
 
@@ -124,7 +147,7 @@ class FreesoundProvider:
             author=item.get("username"),
             source_url=item.get("url") or f"https://freesound.org/s/{item['id']}/",
             raw_license=item.get("license") or "",
-            metadata={k: item.get(k) for k in ("num_downloads", "avg_rating", "num_ratings")},
+            metadata={k: item.get(k) for k in ("num_downloads", "avg_rating", "num_ratings", "filesize")},
         )
 
     def license_info(self, candidate: SoundCandidate) -> LicenseRecord | None:
@@ -185,17 +208,28 @@ class FreesoundProvider:
             raise ValueError(f"freesound {candidate.asset_id}: license '{candidate.raw_license}' is not usable")
         target = cache_dir / "sounds" / "freesound" / f"{candidate.asset_id}.flac"
         original = cache_dir / "downloads" / "freesound" / f"{candidate.asset_id}.{candidate.file_type or 'bin'}"
+        expected = int(candidate.metadata.get("filesize") or 0)
         if not original.exists():
             request = urllib.request.Request(
                 f"{API}/sounds/{candidate.asset_id}/download/",
                 headers={"Authorization": f"Bearer {self._access_token()}"},
             )
             original.parent.mkdir(parents=True, exist_ok=True)
+            body = self._call("download", request)
+            # A dropped connection can end the read early and still look like a complete file,
+            # and a truncated WAV fails much later, deep inside the mixer.
+            if expected and len(body) != expected:
+                raise SoundUnusableError(f"freesound {candidate.asset_id}: got {len(body)} of {expected} bytes")
             tmp = original.with_suffix(original.suffix + ".part")
-            tmp.write_bytes(self._call("download", request))
+            tmp.write_bytes(body)
             tmp.replace(original)
         if not target.exists():
-            normalize_to_flac(original, target)
+            try:
+                normalize_to_flac(original, target)
+            except Exception as exc:  # undecodable download: drop it so a retry fetches it again
+                original.unlink(missing_ok=True)
+                target.unlink(missing_ok=True)
+                raise SoundUnusableError(f"freesound {candidate.asset_id}: cannot decode ({exc})") from exc
         return FetchedSound(candidate, target, sha256_file(original), record)
 
 

@@ -14,7 +14,7 @@ import numpy as np
 from app.audio.mixer.render import render_program
 from app.audio.providers.freesound import FreesoundProvider
 from app.audio.providers.own_recordings import OwnRecordingsProvider
-from app.audio.recipe import LibrarySpec, instantiate, load_recipe
+from app.audio.recipe import LibrarySpec, Recipe, instantiate, load_recipe
 from app.audio.sources import SourceSelector
 from app.database.migrate import is_at_head
 from app.database.session import make_engine, session_scope
@@ -50,6 +50,11 @@ def provider_factory(settings: Settings, ledger: UsageLedger):
     return build
 
 
+def study_jump_limit(recipe: Recipe, settings: Settings) -> float | None:
+    """Ambients offered for studying are held to a calmness limit; the others are not."""
+    return settings.study_max_short_term_jump_lu if "study" in recipe.subniches else None
+
+
 def produce_audio(settings: Settings, recipe_slug: str, minutes: float | None = None, seed: int | None = None) -> tuple[Path, QualityReport]:
     recipe = load_recipe(recipe_slug)
     seed = seed if seed is not None else secrets.randbits(32)
@@ -67,11 +72,11 @@ def produce_audio(settings: Settings, recipe_slug: str, minutes: float | None = 
     if not is_at_head(engine, settings.database_url):
         raise RuntimeError("database has pending migrations; run `python main.py db-upgrade`")
     validator = LicenseValidator(settings.allowed_licenses)
-    ledger = UsageLedger(engine, settings.daily_budget, settings.monthly_budget)
 
     instance = instantiate(recipe, seed)
     started = time.perf_counter()
     with session_scope(engine) as session:
+        ledger = UsageLedger(engine, settings.daily_budget, settings.monthly_budget, session)
         resolution = SourceSelector(session, provider_factory(settings, ledger), validator, settings.cache_dir, seed).resolve(recipe, instance)
     for note in resolution.notes:
         log.warning(note)
@@ -100,7 +105,9 @@ def produce_audio(settings: Settings, recipe_slug: str, minutes: float | None = 
     t_qc = time.perf_counter()
     report = check_audio(
         result.path,
-        AudioThresholds(expected_duration_s=duration_min * 60, target_lufs=settings.target_lufs, max_true_peak_dbtp=settings.target_true_peak),
+        AudioThresholds(expected_duration_s=duration_min * 60, target_lufs=settings.target_lufs,
+                        max_true_peak_dbtp=settings.target_true_peak,
+                        max_short_term_jump_lu=study_jump_limit(recipe, settings)),
         junctions_s=junctions,
     )
     report.add("licenses", license_report.valid, len(resolution.resources), "all in ALLOWED_LICENSES", "licenses.json")

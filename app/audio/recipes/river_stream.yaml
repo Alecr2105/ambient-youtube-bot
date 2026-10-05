@@ -1,13 +1,30 @@
-﻿slug: river_stream
+slug: river_stream
 name: River Stream
 subniches: [study, relaxation, sleep]
 keywords: [river sounds, stream sounds, flowing water, nature sounds for studying, forest river]
 visual_tags: [river, stream, forest, jungle]
 costa_rica_eligible: true
 layers:
+  - name: river_texture
+    source: library
+    library:
+      category: river_texture
+      query: river stream
+      min_duration_s: 60
+      max_duration_s: 300
+      count: 2
+      pool_size: 8
+    generator: river
+    params: {flow: [0.45, 0.75], bubbles_per_second: [40, 90], bubble_level: [0.35, 0.6], rumble_level: [0.2, 0.35]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-2, 0]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 40}
   - name: river
     generator: river
     params: {flow: [0.45, 0.75], bubbles_per_second: [40, 90], bubble_level: [0.35, 0.6], rumble_level: [0.2, 0.35]}
+    gain_db: [-9, -6]
     automation: {depth_db: 1.0, min_period_s: 60, max_period_s: 240}
     intensity_depth_db: 1.5
     eq: {highpass_hz: 40}

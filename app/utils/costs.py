@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import Engine, func, select
+from sqlalchemy.orm import Session
 
 from app.database.models import ApiCost
 from app.database.session import session_scope
@@ -15,20 +18,33 @@ class BudgetExceededError(RuntimeError):
 class UsageLedger:
     """Records every external call in api_costs; answers request counts and spend."""
 
-    def __init__(self, engine: Engine, daily_budget: float, monthly_budget: float):
+    def __init__(self, engine: Engine, daily_budget: float, monthly_budget: float, session: Session | None = None):
+        """`session` makes the ledger write through a transaction that is already open.
+        SQLite takes one writer at a time, and downloading a pool of sounds holds that
+        writer for minutes, so a ledger on its own connection would time out mid-download."""
         self.engine = engine
         self.daily_budget = daily_budget
         self.monthly_budget = monthly_budget
+        self.session = session
+
+    @contextmanager
+    def _open(self) -> Iterator[Session]:
+        if self.session is not None:
+            yield self.session
+            self.session.flush()  # visible to the counting queries that follow
+        else:
+            with session_scope(self.engine) as session:
+                yield session
 
     def record(self, provider: str, operation: str, cost_usd: float = 0.0, units: float = 1.0, video_id: str | None = None, **detail) -> None:
-        with session_scope(self.engine) as session:
+        with self._open() as session:
             session.add(ApiCost(video_id=video_id, provider=provider, operation=operation, units=units, cost_usd=cost_usd, detail=detail))
 
     def _since(self, start: datetime, provider: str | None, column) -> float:
         query = select(func.coalesce(func.sum(column), 0.0)).where(ApiCost.created_at >= start)
         if provider:
             query = query.where(ApiCost.provider == provider)
-        with session_scope(self.engine) as session:
+        with self._open() as session:
             return float(session.scalar(query))
 
     def requests_today(self, provider: str) -> int:

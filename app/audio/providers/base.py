@@ -45,6 +45,11 @@ class ProviderUnavailableError(RuntimeError):
     """Provider not configured, out of quota or unreachable; the selector moves on."""
 
 
+class SoundUnusableError(RuntimeError):
+    """This one sound is unusable (short download, undecodable audio). The provider itself
+    is healthy, so the selector skips this candidate and tries the next one."""
+
+
 class AudioProvider(Protocol):
     name: str
 

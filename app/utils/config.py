@@ -36,6 +36,21 @@ class GpuPolicy(StrEnum):
     FALSE = "false"
 
 
+class VisualStyle(StrEnum):
+    """What the pictures are, so the description never claims more than is true."""
+
+    FOOTAGE = "footage"  # the owner's own footage, filmed in Costa Rica
+    ILLUSTRATED = "illustrated"  # illustrated scenes inspired by Costa Rica
+
+
+class VisualMotion(StrEnum):
+    """How much the picture moves. `off` leaves a photo perfectly still, which also means
+    it is never enlarged: a 1920x1080 photo reaches the encoder untouched."""
+
+    OFF = "off"
+    FULL = "full"
+
+
 def _split_csv(value: object) -> object:
     if isinstance(value, str):
         return [item.strip() for item in value.split(",") if item.strip()]
@@ -82,12 +97,19 @@ class Settings(BaseSettings):
     fps: int = 30
     video_codec: str = "h264"
     video_bitrate: str = "5M"
+    # A still picture needs a fraction of the bits of moving footage; used when nothing moves.
+    static_video_bitrate: str = "800k"
+    visual_motion: VisualMotion = VisualMotion.OFF
+    visual_style: VisualStyle = VisualStyle.FOOTAGE
     use_gpu: GpuPolicy = GpuPolicy.AUTO
 
     audio_sample_rate: int = 48000
     audio_codec: str = "aac"
     audio_bitrate: str = "256k"
     target_lufs: float = Field(-18.0, le=-5, ge=-40)
+    # An ambient tagged for studying must not startle: cap on how far the loudest 3 s
+    # may sit above the usual level (BS.1770-4 short-term loudness).
+    study_max_short_term_jump_lu: float = Field(5.0, gt=0, le=20)
     target_true_peak: float = Field(-1.0, le=0, ge=-10)
 
     daily_budget: float = Field(0.0, ge=0)

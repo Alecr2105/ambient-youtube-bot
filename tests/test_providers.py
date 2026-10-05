@@ -11,7 +11,7 @@ import soundfile as sf
 
 from app.audio.providers.base import ProviderUnavailableError, SoundCandidate, SoundQuery
 from app.audio.providers.freesound import FreesoundProvider
-from app.audio.providers.provenance import assess_metadata, speech_likelihood
+from app.audio.providers.provenance import assess_metadata, speech_likelihood, unwanted_content
 from app.utils.config import LicenseType
 
 SR = 48000
@@ -68,6 +68,26 @@ def test_bird_song_is_not_mistaken_for_music():
     assert assess_metadata(candidate).accepted
 
 
+def test_man_made_sounds_named_in_the_metadata_are_caught():
+    """A real case: a CC0 rain recording whose own title says it has city traffic and a siren."""
+    noisy = good_candidate(name="Rain under a roof with City Traffic And A Siren")
+    assert assess_metadata(noisy).accepted  # nothing wrong with its provenance...
+    assert unwanted_content(noisy) == ["traffic", "sirens", "city"]  # ...but it is not nature ambience
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"name": "Bellbird in the cloud forest"},
+        {"name": "Thunder rolling over the valley"},
+        {"description": "Campfire crackling, recorded with a Zoom H5 at night in the forest."},
+        {"tags": ["rain", "business", "metronome"]},  # no false positives from bus/metro
+    ],
+)
+def test_nature_recordings_pass_the_man_made_filter(override):
+    assert unwanted_content(good_candidate(**override)) == []
+
+
 def test_unknown_uploader_without_signals_is_rejected():
     candidate = good_candidate(description="A long rainy afternoon near the lake, calm.", metadata={}, tags=["rain"])
     assert not assess_metadata(candidate).accepted
@@ -107,12 +127,34 @@ def test_freesound_search_builds_cc0_query_and_parses_results():
     provider = FreesoundProvider("KEY", "CID", None, FakeLedger(), transport)
     results = provider.search(SoundQuery("creek", "texture", 60, 900, frozenset({"8"})))
     params = urllib.parse.parse_qs(urllib.parse.urlparse(seen["url"]).query)
-    assert seen["url"].startswith("https://freesound.org/apiv2/search/?")
-    assert params["filter"] == ['license:"Creative Commons 0" duration:[60 TO 900]']
+    assert seen["url"].startswith("https://freesound.org/apiv2/search/text/?")
+    # CC0 only, the requested length, and no multi-hundred-MB originals above 48 kHz.
+    assert params["filter"] == ['license:"Creative Commons 0" duration:[60 TO 900] '
+                                'filesize:[0 TO 60000000] samplerate:[44100 TO 48000]']
     assert seen["auth"] == "Token KEY"
     assert [c.asset_id for c in results] == ["7"]
     record = provider.license_info(results[0])
     assert record.license_type is LicenseType.CC0 and record.author == "rec"
+
+
+def test_freesound_broadens_a_phrase_that_matches_nothing():
+    """Freesound ANDs the words, so a long phrase can return nothing while two words return plenty."""
+    asked = []
+
+    def transport(request):
+        text = urllib.parse.parse_qs(urllib.parse.urlparse(request.full_url).query)["query"][0]
+        asked.append(text)
+        return search_response(fs_item(7)) if text == "rain window" else search_response()
+
+    provider = FreesoundProvider("KEY", "CID", None, FakeLedger(), transport)
+    results = provider.search(SoundQuery("rain window glass drops", "texture", 60, 900))
+    assert asked == ["rain window glass drops", "rain window"]
+    assert [c.asset_id for c in results] == ["7"]
+
+
+def test_freesound_returns_nothing_when_even_one_word_fails():
+    provider = FreesoundProvider("KEY", "CID", None, FakeLedger(), lambda r: search_response())
+    assert provider.search(SoundQuery("zzz unlikely words", "texture", 60, 900)) == []
 
 
 def test_freesound_rejects_non_commercial_license():

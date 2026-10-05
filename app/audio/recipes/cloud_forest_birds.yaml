@@ -9,9 +9,9 @@ layers:
     source: library
     library:
       category: forest_ambience_texture
-      query: rainforest ambience morning
+      query: rainforest morning
       min_duration_s: 60
-      max_duration_s: 900
+      max_duration_s: 300
       count: 2
       pool_size: 6
     generator: wind
@@ -31,7 +31,7 @@ events:
     source: library
     library:
       category: birdsong_events
-      query: bird song forest
+      query: bird chirp
       min_duration_s: 1.5
       max_duration_s: 20
       count: 12

@@ -44,6 +44,21 @@ class Grade:
     gamma_b: float
 
 
+#: No zoom and no pan: the picture is left exactly as it is.
+STILL = Motion(zoom_base=1.0, zoom_amplitude=0.0, zoom_period=1.0, zoom_phase=0.0,
+               pan_x=0.0, pan_y=0.0, pan_period=1.0, pan_phase=0.0)
+
+
+def _grade(rng: np.random.Generator) -> Grade:
+    return Grade(
+        brightness=float(rng.uniform(-0.03, 0.02)),
+        contrast=float(rng.uniform(0.98, 1.05)),
+        saturation=float(rng.uniform(0.95, 1.10)),
+        gamma_r=float(rng.uniform(0.97, 1.03)),
+        gamma_b=float(rng.uniform(0.97, 1.03)),
+    )
+
+
 @dataclass(frozen=True)
 class SegmentVariant:
     index: int
@@ -69,7 +84,12 @@ class Timeline:
 def _pieces_for(length: float, visuals: list[VisualChoice], rng: np.random.Generator, used: dict[str, list[tuple[float, float]]]) -> tuple[list[Piece], list[float]]:
     videos = [v for v in visuals if v.type == "video"]
     if not videos:
-        image = visuals[int(rng.integers(len(visuals)))]
+        # One photo per segment, taken from the least used ones, so a video shows as many
+        # different pictures as it has segments before repeating any of them.
+        fewest = min(len(used.get(v.path, ())) for v in visuals)
+        pool = [v for v in visuals if len(used.get(v.path, ())) == fewest]
+        image = pool[int(rng.integers(len(pool)))]
+        used.setdefault(image.path, []).append((0.0, length))
         mirror = bool(image.allow_mirror and rng.random() < 0.3)
         return [Piece(image.path, 0.0, length, mirror, True)], []
 
@@ -107,15 +127,17 @@ def _pick_start(duration: float, piece_len: float, used: list[tuple[float, float
     return best
 
 
-def plan_variants(visuals: list[VisualChoice], count: int, body: float, edge: float, seed: int, sleep: bool) -> list[SegmentVariant]:
+def plan_variants(visuals: list[VisualChoice], count: int, body: float, edge: float, seed: int, sleep: bool,
+                  moving: bool = True) -> list[SegmentVariant]:
     rng = np.random.default_rng(np.random.SeedSequence([seed, 0x51DE0]))
     used: dict[str, list[tuple[float, float]]] = {}
     length = body + 2 * edge
     variants = []
+    still_grade = _grade(rng)  # with nothing moving, one look for the whole video instead of one per segment
     for index in range(count):
         pieces, fades = _pieces_for(length, visuals, rng, used)
         is_image = pieces[0].is_image
-        motion = Motion(
+        motion = STILL if not moving else Motion(
             zoom_base=float(rng.uniform(1.03, 1.06)),
             zoom_amplitude=float(rng.uniform(0.04, 0.08) if is_image else rng.uniform(0.01, 0.025)),
             zoom_period=float(rng.uniform(60, 150)),
@@ -125,15 +147,9 @@ def plan_variants(visuals: list[VisualChoice], count: int, body: float, edge: fl
             pan_period=float(rng.uniform(80, 200)),
             pan_phase=float(rng.uniform(0, 2 * math.pi)),
         )
-        grade = Grade(
-            brightness=float(rng.uniform(-0.03, 0.02)),
-            contrast=float(rng.uniform(0.98, 1.05)),
-            saturation=float(rng.uniform(0.95, 1.10)),
-            gamma_r=float(rng.uniform(0.97, 1.03)),
-            gamma_b=float(rng.uniform(0.97, 1.03)),
-        )
+        grade = still_grade if not moving else _grade(rng)
         variants.append(SegmentVariant(index, length, tuple(pieces), tuple(fades), motion, grade))
-    if sleep:
+    if sleep and moving:
         # Progressive darkening: later variants in the timeline are darker.
         steps = np.linspace(0.0, -0.08, count)
         variants = [
@@ -142,6 +158,11 @@ def plan_variants(visuals: list[VisualChoice], count: int, body: float, edge: fl
             for i, v in enumerate(variants)
         ]
     return variants
+
+
+def is_still(variants: list[SegmentVariant]) -> bool:
+    """True when the whole video is a fixed picture: no zoom, no pan and no footage."""
+    return bool(variants) and all(v.motion == STILL for v in variants) and all(p.is_image for v in variants for p in v.pieces)
 
 
 def plan_timeline(duration: float, body: float, edge: float, variant_count: int, seed: int, sleep: bool) -> Timeline:

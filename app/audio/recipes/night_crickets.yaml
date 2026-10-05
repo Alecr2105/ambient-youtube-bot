@@ -1,14 +1,30 @@
-﻿slug: night_crickets
+slug: night_crickets
 name: Night Forest with Crickets
 subniches: [sleep, relaxation]
 keywords: [night sounds, crickets chirping, forest at night, night ambience, nature sounds for sleeping]
 visual_tags: [night, forest, jungle]
 costa_rica_eligible: true
 layers:
+  - name: night_texture
+    source: library
+    library:
+      category: night_insects_texture
+      query: crickets night
+      min_duration_s: 60
+      max_duration_s: 300
+      count: 2
+      pool_size: 8
+    generator: crickets
+    params: {individuals: [4, 9], chorus_level: [0.2, 0.4]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-2, 0]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 300}
   - name: crickets
     generator: crickets
     params: {individuals: [4, 9], chorus_level: [0.2, 0.4]}
-    gain_db: [-4, -1]
+    gain_db: [-10, -7]
     automation: {depth_db: 2.0, min_period_s: 40, max_period_s: 200}
     intensity_depth_db: 1.5
     eq: {highpass_hz: 1500}

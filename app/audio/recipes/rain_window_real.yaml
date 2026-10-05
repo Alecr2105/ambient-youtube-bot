@@ -9,9 +9,9 @@ layers:
     source: library
     library:
       category: rain_window_texture
-      query: rain on window glass
+      query: rain window
       min_duration_s: 60
-      max_duration_s: 900
+      max_duration_s: 300
       count: 2
       pool_size: 6
     generator: rain_window

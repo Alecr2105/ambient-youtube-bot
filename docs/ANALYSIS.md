@@ -7,6 +7,13 @@
 > - Velocidad de subida: **medida el 2026-09-20** — 823 MB en ~20 min (≈0,76 MB/s, ~6 Mbps de subida). Un video de 4 h a 5 Mbps pesa ~6,6 GB, o sea **~2,5 h de subida**; con ~55 min de producción son ~3,5 h de máquina por video diario.
 > - Notificaciones: ninguna por ahora (solo dashboard).
 
+> **Cambios decididos por el dueño del canal el 2026-10-04** (se apartan del brief original):
+> - **Visuales: escenas lofi ilustradas de Costa Rica, generadas con IA**, en vez de footage propio. El brief pedía material propio y prohibía fondos de IA; el dueño lo cambia a conciencia. Consecuencias aplicadas: `VISUAL_STYLE=illustrated` hace que la descripción diga *"Illustrated study scenes inspired by Costa Rica"* y nunca *"filmed by the channel"*; las imágenes con texto en español o logos (Apple, escudo de la Sele) quedan excluidas hasta regenerarlas. Al ser ilustraciones claramente no realistas, YouTube no exige la etiqueta de contenido alterado o sintético (`containsSyntheticMedia` queda en `false`).
+> - **Imagen estática** (`VISUAL_MOTION=off`): sin zoom ni paneo, una imagen por segmento y fundido entre ellas; archivo a `STATIC_VIDEO_BITRATE=800k`.
+> - **Audio con grabaciones reales CC0 de Freesound** sobre la cama procedural en 12 recetas, con filtro de ruido artificial (tráfico, sirenas, motores…) y descargas limitadas a ≤ 60 MB y ≤ 48 kHz.
+> - **Canal orientado a estudiar**: las recetas ofrecidas para estudio deben pasar `calm_for_study` (el momento más fuerte de 3 s no más de 5 LU sobre el nivel normal).
+> - **Riesgo a vigilar**: IA en la imagen + audio generado + publicación diaria automática es el perfil que YouTube revisa por "contenido no auténtico" al pedir el Programa de Socios. Lo sostienen el audio original que nunca se repite, una identidad visual propia y la metadata honesta.
+
 > Entregable de la sección 8 del brief (`CLAUDE.md`). Fecha: 2026-09-13.
 > Hasta que lo apruebes no se escribe código de implementación.
 > Los datos externos verificados llevan la fuente al lado. Lo que **no** pude verificar está marcado como **[SIN VERIFICAR]** y queda como tarea antes de la fase que lo necesite.

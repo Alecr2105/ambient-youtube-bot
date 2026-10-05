@@ -1,14 +1,30 @@
-﻿slug: heavy_rain_window
+slug: heavy_rain_window
 name: Heavy Rain on Window
-subniches: [sleep, relaxation]
-keywords: [heavy rain sounds, rain on window, rain sounds for sleeping, relaxing rain, sleep ambience]
+subniches: [sleep, relaxation, study]
+keywords: [heavy rain sounds, rain on window, rain sounds for sleeping, rain sounds for studying, relaxing rain]
 visual_tags: [rain, window]
 costa_rica_eligible: false
 layers:
+  - name: window_texture
+    source: library
+    library:
+      category: rain_window_texture
+      query: rain window
+      min_duration_s: 60
+      max_duration_s: 300
+      count: 2
+      pool_size: 8
+    generator: rain_window
+    params: {taps_per_second: [140, 260], tap_level: [0.5, 0.75], outside_level: [0.6, 0.85], rivulet_level: [0.15, 0.35]}
+    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
+    gain_db: [-2, 0]
+    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+    intensity_depth_db: 2.0
+    eq: {highpass_hz: 50}
   - name: window
     generator: rain_window
     params: {taps_per_second: [140, 260], tap_level: [0.5, 0.75], outside_level: [0.6, 0.85], rivulet_level: [0.15, 0.35]}
-    gain_db: [-1, 1]
+    gain_db: [-8, -5]
     automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
     intensity_depth_db: 2.5
     eq: {highpass_hz: 50}

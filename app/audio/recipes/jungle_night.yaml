@@ -1,4 +1,4 @@
-﻿slug: jungle_night
+slug: jungle_night
 name: Rainforest Night with Frogs and Insects
 subniches: [sleep, relaxation]
 keywords: [jungle sounds, rainforest sounds at night, night ambience, frogs and crickets, nature sounds for sleeping, costa rica]
@@ -9,9 +9,9 @@ layers:
     source: library
     library:
       category: jungle_night_texture
-      query: rainforest night frogs insects
+      query: rainforest night
       min_duration_s: 60
-      max_duration_s: 900
+      max_duration_s: 300
       count: 2
       pool_size: 6
     generator: crickets

@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 from app.audio import catalog
 from app.audio.catalog import CatalogSound
 from app.audio.generators.granular import _load
-from app.audio.providers.base import AudioProvider, ProviderUnavailableError, SoundQuery
-from app.audio.providers.provenance import assess_metadata, speech_likelihood
+from app.audio.providers.base import AudioProvider, ProviderUnavailableError, SoundQuery, SoundUnusableError
+from app.audio.providers.provenance import assess_metadata, speech_likelihood, unwanted_content
 from app.audio.recipe import Event, Layer, LibrarySpec, Recipe
 from app.licensing.licenses import LicenseRecord
 from app.licensing.validator import LicenseValidator
@@ -134,15 +134,26 @@ class SourceSelector:
                     if not verdict.accepted:
                         log.debug("rejected %s/%s: %s", provider_name, candidate.asset_id, verdict.summary())
                         continue
+                    if (noise := unwanted_content(candidate)):
+                        log.info("rejected %s/%s: metadata mentions %s", provider_name, candidate.asset_id, ", ".join(noise))
+                        continue
                     notes = verdict.summary()
                 try:
                     fetched = provider.fetch(candidate, self.cache_dir)
                 except ProviderUnavailableError as exc:
                     result.notes.append(f"{provider_name}: {exc}")
                     break
+                except SoundUnusableError as exc:
+                    log.info("rejected %s", exc)
+                    continue
                 speech = 0.0
                 if kind == "texture":
-                    speech = speech_likelihood(np.asarray(_load(str(fetched.local_path), 48000)), 48000)
+                    try:
+                        audio = np.asarray(_load(str(fetched.local_path), 48000))
+                    except Exception as exc:  # never let one bad file fail the day's video
+                        log.info("rejected %s/%s: unreadable audio (%s)", provider_name, candidate.asset_id, exc)
+                        continue
+                    speech = speech_likelihood(audio, 48000)
                     if speech > SPEECH_REJECT_THRESHOLD:
                         log.info("rejected %s/%s: speech-like modulation %.2f", provider_name, candidate.asset_id, speech)
                         continue

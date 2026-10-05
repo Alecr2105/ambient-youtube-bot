@@ -44,9 +44,10 @@ from app.quality.video import VideoThresholds, check_video
 from app.research.suggest import RankedTerm
 from app.thumbnails.generator import generate_thumbnails
 from app.utils import ffmpeg
-from app.utils.config import LicenseType, Mode, Settings
+from app.utils.config import LicenseType, Mode, Settings, VisualMotion
 from app.utils.costs import UsageLedger
-from app.video.plan import plan_timeline, plan_variants
+from app.video.plan import is_still, plan_timeline, plan_variants
+from app.audio.produce import study_jump_limit
 from app.video.produce import EDGE_S, variant_plan_for
 from app.video.render import VideoFormat, render_video
 from app.visuals.matcher import NoMatchingVisualsError, VisualChoice, choose_visuals, mark_used
@@ -55,6 +56,7 @@ log = logging.getLogger(__name__)
 
 SEGMENT_SECONDS = 600.0
 MAX_VARIANTS = 6
+MAX_PHOTO_VARIANTS = 8  # a still video changes picture instead of moving, so it can use more segments
 
 
 class ContentError(RuntimeError):
@@ -132,8 +134,8 @@ def stage_audio_sources(ctx: Context) -> dict:
     from app.audio.produce import provider_factory
 
     instance = instantiate(ctx.recipe, ctx.seed)
-    ledger = UsageLedger(ctx.engine, settings.daily_budget, settings.monthly_budget)
     with session_scope(ctx.engine) as session:
+        ledger = UsageLedger(ctx.engine, settings.daily_budget, settings.monthly_budget, session)
         resolution = SourceSelector(session, provider_factory(settings, ledger), validator, settings.cache_dir, ctx.seed).resolve(ctx.recipe, instance)
     report = build_license_report(ctx.video_id, resolution.resources, validator)
     if not report.valid:
@@ -158,7 +160,10 @@ def stage_audio_check(ctx: Context) -> dict:
     junctions = ctx.read_json("audio_render.json")["junctions_s"]
     if len(junctions) > 400:
         junctions = [junctions[i] for i in np.linspace(0, len(junctions) - 1, 400).astype(int)]
-    report = check_audio(ctx.out / "audio.flac", AudioThresholds(expected_duration_s=ctx.duration, target_lufs=s.target_lufs, max_true_peak_dbtp=s.target_true_peak), junctions)
+    thresholds = AudioThresholds(expected_duration_s=ctx.duration, target_lufs=s.target_lufs,
+                                 max_true_peak_dbtp=s.target_true_peak,
+                                 max_short_term_jump_lu=study_jump_limit(ctx.recipe, s))
+    report = check_audio(ctx.out / "audio.flac", thresholds, junctions)
     report.write(ctx.out / "audio_report.json")
     if not report.passed:
         raise ContentError(f"audio quality failed: {[c.name for c in report.failures()]}")
@@ -168,8 +173,10 @@ def stage_audio_check(ctx: Context) -> dict:
 def stage_visual_selection(ctx: Context) -> dict:
     visuals = _ensure_fresh_concept(ctx)
     sleep = ctx.recipe.subniches[0] == "sleep"
-    body, count = variant_plan_for(ctx.duration, SEGMENT_SECONDS, MAX_VARIANTS)
-    variants = plan_variants(visuals, count, body, EDGE_S, ctx.seed, sleep)
+    moving = ctx.settings.visual_motion is not VisualMotion.OFF
+    photos_only = all(v.type == "image" for v in visuals)
+    body, count = variant_plan_for(ctx.duration, SEGMENT_SECONDS, MAX_PHOTO_VARIANTS if photos_only else MAX_VARIANTS)
+    variants = plan_variants(visuals, count, body, EDGE_S, ctx.seed, sleep, moving=moving)
     timeline = plan_timeline(ctx.duration, body, EDGE_S, count, ctx.seed, sleep)
     ctx.write_json("visual_plan.json", {"visuals": [asdict(v) for v in visuals], "body_s": body, "edge_s": EDGE_S,
                                         "timeline": timeline.order, "variants": [asdict(v) for v in variants]})
@@ -187,7 +194,8 @@ def stage_metadata(ctx: Context) -> dict:
         recent = _recent_titles(session, ctx.video_id)
     package = build_metadata(ctx.recipe, ctx.duration / 60, research, recent, ctx.seed, ctx.settings.youtube_category_id,
                              filmed_in_costa_rica=True, attribution=licenses["attribution_block"],
-                             enable_es_localization=ctx.settings.enable_es_localization)
+                             enable_es_localization=ctx.settings.enable_es_localization,
+                             visual_style=ctx.settings.visual_style.value)
     package.write(ctx.out / "metadata.json")
     return {"title": package.title}
 
@@ -209,7 +217,9 @@ def stage_render_video(ctx: Context) -> dict:
     probe_bin = ffmpeg.require_binary("ffprobe", s.ffprobe_path)
     encoder = ffmpeg.select_video_encoder(s.video_codec, s.use_gpu, ffmpeg.list_encoders(binary), lambda n: ffmpeg.encoder_works(binary, n, s.width, s.height))
     _data, variants, timeline = _load_plan(ctx)
-    fmt = VideoFormat(s.width, s.height, s.fps, s.video_bitrate, s.audio_codec, s.audio_bitrate)
+    still = is_still(variants)
+    bitrate = s.static_video_bitrate if still else s.video_bitrate
+    fmt = VideoFormat(s.width, s.height, s.fps, bitrate, s.audio_codec, s.audio_bitrate, still=still)
     result = render_video(binary, probe_bin, variants, timeline, ctx.out / "audio.flac", ctx.duration, fmt, encoder, ctx.work / "video", ctx.out / "video.mp4", s.cache_dir)
     thumb, thumbs = generate_thumbnails(binary, result.path, result.duration, result.junctions_s, ctx.recipe, ctx.duration / 60, ctx.out / "thumbs")
     ctx.write_json("video_render.json", {"junctions_s": result.junctions_s, "timings": result.timings, "encoder": encoder.name,
