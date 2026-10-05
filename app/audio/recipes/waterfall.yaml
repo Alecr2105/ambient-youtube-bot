@@ -5,30 +5,17 @@ keywords: [waterfall sounds, waterfall white noise, nature sounds for sleeping, 
 visual_tags: [waterfall, jungle, forest]
 costa_rica_eligible: true
 layers:
-  - name: falls_texture
-    source: library
-    library:
-      category: waterfall_texture
-      query: waterfall
-      min_duration_s: 60
-      max_duration_s: 300
-      count: 2
-      pool_size: 8
-    generator: waterfall
-    params: {roar_level: [0.85, 1.0], body_level: [0.45, 0.75], spray_level: [0.2, 0.4]}
-    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
-    gain_db: [-2, 0]
-    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-    intensity_depth_db: 2.0
-    eq: {highpass_hz: 35}
-  - name: falls
-    generator: waterfall
-    params: {roar_level: [0.85, 1.0], body_level: [0.45, 0.75], spray_level: [0.2, 0.4]}
-    gain_db: [-8, -5]
-    automation: {depth_db: 0.8, min_period_s: 60, max_period_s: 300}
-    intensity_depth_db: 1.0
-  - name: pool
-    generator: river
-    params: {flow: [0.3, 0.5], bubbles_per_second: [60, 120], bubble_level: 0.5, rumble_level: 0.1}
-    gain_db: [-12, -8]
-    automation: {depth_db: 1.5, min_period_s: 30, max_period_s: 120}
+- name: falls
+  library: {category: waterfall_texture, query: waterfall, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 12}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-1, 0]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 35}
+- name: pool
+  library: {category: brook_texture, query: brook, min_duration_s: 60, max_duration_s: 300, count: 2, pool_size: 8}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-10, -7]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 40}

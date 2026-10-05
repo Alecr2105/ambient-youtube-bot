@@ -20,6 +20,19 @@ from app.utils.config import GpuPolicy
 
 FFMPEG = ffmpeg.resolve_binary("ffmpeg")
 pytestmark = pytest.mark.skipif(FFMPEG is None, reason="FFmpeg not installed")
+SR = 48000
+
+
+def own_recording(path: Path, seconds: float, seed: int) -> None:
+    """Stand-in for a field recording in assets/audio_own/<category>/: noise with slow level changes."""
+    import numpy as np
+    import soundfile as sf
+
+    rng = np.random.default_rng(seed)
+    steps = rng.uniform(0.5, 1.0, int(seconds) + 2)
+    envelope = np.interp(np.arange(int(SR * seconds)) / SR, np.arange(len(steps)), steps)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(path, rng.standard_normal((int(SR * seconds), 2)) * 0.1 * envelope[:, None], SR, subtype="PCM_16")
 
 
 @pytest.fixture
@@ -31,9 +44,15 @@ def env(make_settings, tmp_path, monkeypatch):
          "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", str(visuals / "rain_window_forest.mp4")],
         check=True, timeout=120,
     )
+    # Every sound is a real recording: give heavy_rain_window's two layers something to use.
+    own = tmp_path / "audio_own"
+    for i, category in enumerate(("rain_window_texture", "heavy_rain_texture")):
+        for n in range(2):
+            own_recording(own / category / f"take{n}.wav", 65, seed=10 * i + n)
     settings = make_settings(
         visuals_dir=visuals, resolution="640x360", use_gpu=GpuPolicy.FALSE, video_bitrate="800k",
         video_duration=1, max_retries=1, backoff_base=0.01, min_free_disk_gb=0, audio_providers=["own"],
+        audio_own_dir=own,
     )
     upgrade_to_head(settings.database_url)
     engine = make_engine(settings.database_url)

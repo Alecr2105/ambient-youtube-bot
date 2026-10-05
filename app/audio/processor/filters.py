@@ -52,12 +52,6 @@ def butter_sos(sample_rate: int, kind: str, freq: float | tuple[float, float], o
     return signal.butter(order, min(max(freq, 1.0), nyquist * 0.98), btype=kind, fs=sample_rate, output="sos")
 
 
-def resonator_sos(sample_rate: int, freq: float, q: float) -> np.ndarray:
-    """Constant-peak bandpass biquad: an impulse through it rings at `freq`, decay set by `q`."""
-    b, a = signal.iirpeak(min(freq, sample_rate * 0.45), q, fs=sample_rate)
-    return signal.tf2sos(b, a)
-
-
 class SosFilter:
     """Stateful multi-channel SOS filter; output is independent of block size."""
 

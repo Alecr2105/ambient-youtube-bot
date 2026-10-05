@@ -1,8 +1,9 @@
-"""Resolves each recipe layer/event to a concrete sound source.
+"""Resolves each recipe layer/event to real recordings.
 
-Order (docs/ANALYSIS.md §2): procedural stays procedural; library items use the local
-catalog, grow it from providers (own recordings, then Freesound CC0) when it is below
-pool size, and fall back to the recipe's procedural generator when nothing usable exists.
+Every item uses the local catalog and grows it from providers (own recordings, then
+Freesound CC0) while it is below pool size. There is no synthetic fallback (owner's
+decision, 2026-10-04): a required item with no usable recording fails the recipe, and the
+daily selector moves on to another one.
 """
 
 from __future__ import annotations
@@ -72,9 +73,6 @@ class SourceSelector:
         return result
 
     def _resolve_item(self, spec: Layer | Event, resolved: dict[str, Any], kind: str, result: Resolution) -> None:
-        if spec.source == "procedural":
-            result.resources.append(_procedural(spec.name, kind, resolved["generator"]))
-            return
         sounds = self._library_sounds(spec.library, kind, result)
         if sounds:
             chosen = [sounds[i] for i in self.rng.permutation(len(sounds))[: spec.library.count]]
@@ -88,12 +86,6 @@ class SourceSelector:
             resolved["sound_ids"] = [s.id for s in chosen]
             for s in chosen:
                 result.resources.append(UsedResource(spec.name, kind, s.provider, s.asset_id, s.license, s.id, s.local_path))
-            return
-        if spec.generator is not None:
-            result.notes.append(f"{spec.name}: no licensed recordings available, using procedural '{spec.generator}'")
-            resolved["generator"] = spec.generator
-            resolved["source"] = "procedural_fallback"
-            result.resources.append(_procedural(spec.name, kind, spec.generator))
             return
         if spec.required:
             raise SourceUnavailableError(f"required {kind} '{spec.name}' has no usable source")
@@ -161,8 +153,3 @@ class SourceSelector:
                 catalog.register(self.session, fetched, library.category, kind, self.validator, {"speech_likelihood": speech})
                 wanted -= 1
                 log.info("catalogued %s/%s for %s", provider_name, candidate.asset_id, library.category)
-
-
-def _procedural(name: str, kind: str, generator: str) -> UsedResource:
-    record = LicenseRecord(LicenseType.PROCEDURAL, None, None, title=f"procedural:{generator}", verified_by="system")
-    return UsedResource(name, kind, "procedural", generator, record)

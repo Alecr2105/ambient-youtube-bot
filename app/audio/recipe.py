@@ -8,8 +8,6 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.audio.generators.registry import EVENT_GENERATORS, LAYER_GENERATORS
-
 RECIPES_DIR = Path(__file__).parent / "recipes"
 
 Range = tuple[float, float]
@@ -60,12 +58,12 @@ class GranularSpec(Strict):
 
 
 class Layer(Strict):
+    """A continuous texture rebuilt for hours from real recordings (granular resynthesis).
+    Every sound comes from the library: the owner's recordings or CC0 Freesound recordings."""
+
     name: str
-    source: Literal["procedural", "library"] = "procedural"
-    generator: str | None = Field(None, description="procedural generator, or fallback for library layers")
-    library: LibrarySpec | None = None
+    library: LibrarySpec
     granular: GranularSpec = GranularSpec()
-    params: dict[str, Range] = {}
     gain_db: Range = (0.0, 0.0)
     width: float = Field(1.0, ge=0, le=1.5)
     required: bool = True
@@ -75,35 +73,14 @@ class Layer(Strict):
 
     coerce_ranges = field_validator("gain_db", mode="before")(_as_range)
 
-    @field_validator("params", mode="before")
-    @classmethod
-    def _param_ranges(cls, value: dict[str, Any]) -> dict[str, Any]:
-        return {key: _as_range(v) for key, v in (value or {}).items()}
-
-    @field_validator("generator")
-    @classmethod
-    def _known(cls, value: str | None) -> str | None:
-        if value is not None and value not in LAYER_GENERATORS:
-            raise ValueError(f"unknown layer generator '{value}'")
-        return value
-
-    @model_validator(mode="after")
-    def _source_fields(self) -> Layer:
-        if self.source == "procedural" and self.generator is None:
-            raise ValueError(f"layer '{self.name}': procedural layers need a generator")
-        if self.source == "library" and self.library is None:
-            raise ValueError(f"layer '{self.name}': library layers need a library section")
-        return self
-
 
 class Event(Strict):
+    """Short real recordings (a thunder clap, a bird call) dropped in at random times."""
+
     name: str
-    source: Literal["procedural", "library"] = "procedural"
-    generator: str | None = None
-    library: LibrarySpec | None = None
+    library: LibrarySpec
     pitch_cents: float = Field(80.0, ge=0, le=300)
     required: bool = Field(False, description="true when the ambient makes no sense without this event")
-    params: dict[str, Range] = {}
     rate_per_hour: Range
     gain_db: Range
     min_gap_s: float = Field(20.0, ge=0)
@@ -111,26 +88,6 @@ class Event(Strict):
     width: float = Field(1.0, ge=0, le=1.5)
 
     coerce_ranges = field_validator("rate_per_hour", "gain_db", mode="before")(_as_range)
-
-    @field_validator("params", mode="before")
-    @classmethod
-    def _param_ranges(cls, value: dict[str, Any]) -> dict[str, Any]:
-        return {key: _as_range(v) for key, v in (value or {}).items()}
-
-    @field_validator("generator")
-    @classmethod
-    def _known(cls, value: str | None) -> str | None:
-        if value is not None and value not in EVENT_GENERATORS:
-            raise ValueError(f"unknown event generator '{value}'")
-        return value
-
-    @model_validator(mode="after")
-    def _source_fields(self) -> Event:
-        if self.source == "procedural" and self.generator is None:
-            raise ValueError(f"event '{self.name}': procedural events need a generator")
-        if self.source == "library" and self.library is None:
-            raise ValueError(f"event '{self.name}': library events need a library section")
-        return self
 
 
 class Intensity(Strict):
@@ -193,22 +150,17 @@ def pick(rng: np.random.Generator, value: Range) -> float:
 def instantiate(recipe: Recipe, seed: int) -> dict[str, Any]:
     """Resolve every range in the recipe into one concrete, reproducible variant."""
     rng = np.random.default_rng(np.random.SeedSequence([seed, 0xA11B]))
+    # "generator" and "params" are filled in by the source selector once the recordings are chosen.
     layers = [
-        {
-            "name": layer.name,
-            "source": layer.source,
-            "generator": layer.generator,
-            "params": {k: pick(rng, v) for k, v in layer.params.items()},
-            "gain_db": pick(rng, layer.gain_db),
-        }
+        {"name": layer.name, "source": "library", "generator": None, "params": {}, "gain_db": pick(rng, layer.gain_db)}
         for layer in recipe.layers
     ]
     events = [
         {
             "name": event.name,
-            "source": event.source,
-            "generator": event.generator,
-            "params": {k: list(v) for k, v in event.params.items()},
+            "source": "library",
+            "generator": None,
+            "params": {},
             "rate_per_hour": pick(rng, event.rate_per_hour),
             "gain_db": list(event.gain_db),
         }

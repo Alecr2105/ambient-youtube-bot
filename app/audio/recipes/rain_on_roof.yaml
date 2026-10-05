@@ -5,33 +5,18 @@ keywords: [rain on roof, rain on tin roof, rain sounds for sleeping, heavy rain 
 visual_tags: [rain, roof, zinc]
 costa_rica_eligible: true
 layers:
-  - name: roof_texture
-    source: library
-    library:
-      category: rain_roof_texture
-      query: rain roof
-      min_duration_s: 60
-      max_duration_s: 300
-      count: 2
-      pool_size: 8
-    generator: rain_roof
-    params: {drops_per_second: [500, 1000], metal_level: [0.45, 0.7], bed_level: [0.5, 0.7], boom_level: [0.2, 0.4]}
-    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
-    gain_db: [-2, 0]
-    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-    intensity_depth_db: 2.0
-    eq: {highpass_hz: 45}
-  - name: roof
-    generator: rain_roof
-    params: {drops_per_second: [500, 1000], metal_level: [0.45, 0.7], bed_level: [0.5, 0.7], boom_level: [0.2, 0.4]}
-    gain_db: [-9, -6]
-    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 180}
-    intensity_depth_db: 3.0
-    eq: {highpass_hz: 45}
-  - name: gutter_rain
-    generator: rain
-    params: {drops_per_second: [800, 1400], brightness: [0.3, 0.5], bed_level: 0.7, drop_level: 0.4}
-    gain_db: [-10, -7]
-    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
-    intensity_depth_db: 2.0
-    eq: {lowpass_hz: 6000}
+- name: roof
+  library: {category: rain_roof_texture, query: rain roof, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 12}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-1, 0]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 45}
+- name: metal_roof
+  library: {category: rain_metal_roof_texture, query: rain metal roof, min_duration_s: 60, max_duration_s: 300, count: 2,
+    pool_size: 6}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-7, -4]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 45}

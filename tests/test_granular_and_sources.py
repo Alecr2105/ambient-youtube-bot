@@ -11,7 +11,7 @@ from app.audio.generators.granular import GranularTexture, SampleEvent
 from app.audio.mixer.render import render_program
 from app.audio.providers.base import FetchedSound, ProviderUnavailableError, SoundCandidate
 from app.audio.providers.normalize import normalize_to_flac, sha256_file
-from app.audio.recipe import load_recipe, instantiate
+from app.audio.recipe import Recipe, instantiate, load_recipe
 from app.audio.sources import SourceSelector, SourceUnavailableError
 from app.database.migrate import upgrade_to_head
 from app.database.session import make_engine, session_scope
@@ -34,6 +34,13 @@ def texture_file(path: Path, seconds: float, seed: int) -> Path:
     return path
 
 
+def one_layer(slug: str) -> Recipe:
+    """The recipe's lead texture only, so each test looks at one library item."""
+    data = load_recipe(slug).model_dump()
+    data["layers"], data["events"] = data["layers"][:1], []
+    return Recipe.model_validate(data)
+
+
 def test_granular_output_is_continuous_and_records_junctions(tmp_path):
     source = texture_file(tmp_path / "t.flac", 60, 1)
     generator = GranularTexture.create(SR, np.random.SeedSequence(3), 240, sources=[str(source)], grain_min_s=5, grain_max_s=10)
@@ -46,7 +53,7 @@ def test_granular_output_is_continuous_and_records_junctions(tmp_path):
 
 
 def test_granular_long_render_from_short_source_passes_loop_and_click_gates(tmp_path):
-    recipe = load_recipe("rain_window_real")
+    recipe = one_layer("rain_window_real")
     source = texture_file(tmp_path / "window.flac", 90, 2)
     instance = instantiate(recipe, 5)
     instance["layers"][0].update(generator="granular", params={**recipe.layers[0].granular.model_dump(), "sources": [str(source)]})
@@ -93,9 +100,6 @@ class FakeProvider:
         self.fetched.append(candidate.asset_id)
         return FetchedSound(candidate, target, sha256_file(raw), self.license_info(candidate))
 
-    def cost_estimate(self, query):
-        return 0.0
-
 
 @pytest.fixture
 def db(make_settings):
@@ -106,11 +110,11 @@ def db(make_settings):
     engine.dispose()
 
 
-VALIDATOR = LicenseValidator([LicenseType.CC0, LicenseType.PROCEDURAL, LicenseType.OWN])
+VALIDATOR = LicenseValidator([LicenseType.CC0, LicenseType.OWN])
 
 
 def test_selector_uses_only_whitelisted_recordings_and_reports_them(db, tmp_path):
-    recipe = load_recipe("rain_window_real")
+    recipe = one_layer("rain_window_real")
     provider = FakeProvider(tmp_path, ["Creative Commons 0", "Attribution NonCommercial", "http://creativecommons.org/publicdomain/zero/1.0/"])
     instance = instantiate(recipe, 9)
     with session_scope(db) as session:
@@ -120,13 +124,12 @@ def test_selector_uses_only_whitelisted_recordings_and_reports_them(db, tmp_path
     assert provider.fetched == ["0", "2"]  # the NC sound is never downloaded
     report = build_license_report("run", resolution.resources, VALIDATOR)
     assert report.valid
-    kinds = {entry["license_type"] for entry in report.data["resources"]}
-    assert kinds == {"CC0", "PROCEDURAL"}
-    assert all(e["provenance_notes"] for e in report.data["resources"] if e["license_type"] == "CC0")
+    assert {entry["license_type"] for entry in report.data["resources"]} == {"CC0"}  # nothing synthetic
+    assert all(e["provenance_notes"] for e in report.data["resources"])
 
 
 def test_selector_reuses_catalog_without_calling_provider(db, tmp_path):
-    recipe = load_recipe("rain_window_real")
+    recipe = one_layer("rain_window_real")
     first = FakeProvider(tmp_path, ["Creative Commons 0"] * 6)
     with session_scope(db) as session:
         SourceSelector(session, lambda n, l: first, VALIDATOR, tmp_path / "cache", 1).resolve(recipe, instantiate(recipe, 1))
@@ -138,41 +141,34 @@ def test_selector_reuses_catalog_without_calling_provider(db, tmp_path):
     assert any("offline" in note for note in resolution.notes)
 
 
-def test_selector_falls_back_to_procedural_and_blacklist_is_respected(db, tmp_path):
-    recipe = load_recipe("rain_window_real")
+def test_blacklisted_recording_is_never_used_and_nothing_synthetic_takes_its_place(db, tmp_path):
+    recipe = one_layer("rain_window_real")
     provider = FakeProvider(tmp_path, ["Creative Commons 0"])
     with session_scope(db) as session:
         SourceSelector(session, lambda n, l: provider, VALIDATOR, tmp_path / "cache", 1).resolve(recipe, instantiate(recipe, 1))
         sound = catalog.find(session, "rain_window_texture", "texture", VALIDATOR)[0]
         catalog.blacklist(session, sound.id, "Content ID claim")
     nothing = FakeProvider(tmp_path, [])
-    instance = instantiate(recipe, 3)
-    with session_scope(db) as session:
-        resolution = SourceSelector(session, lambda n, l: nothing, VALIDATOR, tmp_path / "cache", 3).resolve(recipe, instance)
-    assert instance["layers"][0]["generator"] == "rain_window"
-    assert instance["layers"][0]["source"] == "procedural_fallback"
-    assert any("procedural" in note for note in resolution.notes)
+    with session_scope(db) as session, pytest.raises(SourceUnavailableError, match="window"):
+        SourceSelector(session, lambda n, l: nothing, VALIDATOR, tmp_path / "cache", 3).resolve(recipe, instantiate(recipe, 3))
 
 
 def test_required_event_without_sources_fails_but_optional_is_skipped(db, tmp_path):
-    recipe = load_recipe("cloud_forest_birds")
-    with session_scope(db) as session, pytest.raises(SourceUnavailableError, match="birds"):
-        SourceSelector(session, lambda n, l: None, VALIDATOR, tmp_path / "cache", 4).resolve(recipe, instantiate(recipe, 4))
+    data = load_recipe("thunderstorm").model_dump()
+    data["layers"] = data["layers"][:1]
+    textures = FakeProvider(tmp_path, ["Creative Commons 0"] * 2)
 
-    data = recipe.model_dump()
+    def only_textures(name, library):
+        return textures if library.category.endswith("_texture") else None
+
+    required = Recipe.model_validate(data)
+    with session_scope(db) as session, pytest.raises(SourceUnavailableError, match="thunder"):
+        SourceSelector(session, only_textures, VALIDATOR, tmp_path / "cache", 4).resolve(required, instantiate(required, 4))
+
     data["events"][0]["required"] = False
-    optional = type(recipe).model_validate(data)
+    optional = Recipe.model_validate(data)
     instance = instantiate(optional, 4)
     with session_scope(db) as session:
-        SourceSelector(session, lambda n, l: None, VALIDATOR, tmp_path / "cache", 4).resolve(optional, instance)
+        SourceSelector(session, only_textures, VALIDATOR, tmp_path / "cache", 4).resolve(optional, instance)
     assert instance["events"][0].get("skipped") is True
-    assert instance["layers"][0]["generator"] == "wind"
-
-
-def test_required_library_layer_without_fallback_raises(db, tmp_path):
-    recipe = load_recipe("rain_window_real")
-    data = recipe.model_dump()
-    data["layers"][0]["generator"] = None
-    broken = type(recipe).model_validate(data)
-    with session_scope(db) as session, pytest.raises(SourceUnavailableError):
-        SourceSelector(session, lambda n, l: None, VALIDATOR, tmp_path / "cache", 1).resolve(broken, instantiate(broken, 1))
+    assert instance["layers"][0]["generator"] == "granular"

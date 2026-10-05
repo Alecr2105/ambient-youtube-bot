@@ -5,32 +5,17 @@ keywords: [ocean waves for sleep, ocean sounds, beach sounds, relaxing waves, na
 visual_tags: [ocean, beach, waves, sunset]
 costa_rica_eligible: true
 layers:
-  - name: shore_texture
-    source: library
-    library:
-      category: ocean_shore_texture
-      query: ocean waves
-      min_duration_s: 60
-      max_duration_s: 300
-      count: 2
-      pool_size: 8
-    generator: ocean
-    params: {min_period_s: [7, 9], max_period_s: [12, 15], wash_level: [0.45, 0.75], surf_level: [0.08, 0.16]}
-    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
-    gain_db: [-5, -3]
-    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-    intensity_depth_db: 1.5
-    eq: {highpass_hz: 35}
-  - name: waves
-    generator: ocean
-    params: {min_period_s: [7, 9], max_period_s: [12, 15], wash_level: [0.45, 0.75], surf_level: [0.08, 0.16]}
-    gain_db: [-8, -5]
-    automation: {depth_db: 1.0, min_period_s: 60, max_period_s: 300}
-    intensity_depth_db: 2.0
-    eq: {highpass_hz: 35}
-  - name: sea_breeze
-    generator: wind
-    params: {gustiness: [0.2, 0.4], whistle_level: 0.0}
-    gain_db: [-20, -15]
-    automation: {depth_db: 2.0, min_period_s: 30, max_period_s: 120}
-    eq: {lowpass_hz: 2000}
+- name: shore
+  library: {category: ocean_shore_texture, query: ocean waves, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 12}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-3, -1]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 35}
+- name: beach
+  library: {category: beach_waves_texture, query: beach waves, min_duration_s: 60, max_duration_s: 300, count: 3, pool_size: 10}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-7, -4]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 35}

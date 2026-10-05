@@ -3,7 +3,7 @@
 Bot que produce, cada día y sin intervención, videos de ambiente sonoro de 3–4 h para el canal **Costa Rica Ambience**: elige el ambiente, investiga keywords en inglés, genera el audio, arma el video con tu footage, crea miniatura y metadata, pasa un quality gate y sube el video programado a YouTube.
 
 - Especificación: `CLAUDE.md` · Análisis aprobado: `docs/ANALYSIS.md` · Auditoría de la API: `docs/YOUTUBE_AUDIT.md`
-- Todo lo que ve YouTube está en inglés. Todo el audio es procedural o de licencias verificadas. El video usa solo tus archivos.
+- Todo lo que ve YouTube está en inglés. Todo el audio son grabaciones reales con licencia verificada (CC0 de Freesound o tuyas). El video usa solo tus archivos.
 
 ---
 
@@ -116,9 +116,10 @@ Ver `Dockerfile`. Sin GPU el render usa libx264 y tarda bastante más.
 
 ## 7. Cómo funciona
 
-**Audio.** Base procedural sin loops (lluvia, viento, olas, río, fuego, grillos, truenos), más grabaciones reales **solo CC0** de Freesound donde lo procedural no alcanza:
-- Las grabaciones pasan filtros anti-reclamo y se convierten en horas con resíntesis granular.
-- Si una receta pide una grabación que no existe, usa su respaldo procedural. Si la capa es obligatoria, la receta no se produce.
+**Audio.** Solo grabaciones reales: **CC0 de Freesound** o tus propias grabaciones en `assets/audio_own/<categoría>/`. Nada sintético (decisión del 2026-10-04):
+- Cada receta mezcla dos capas de textura con búsquedas distintas (por ejemplo lluvia en la ventana y lluvia afuera), con 3–4 grabaciones cada una, más eventos sueltos donde corresponde (truenos, crujidos, pájaros).
+- Las grabaciones pasan filtros anti-reclamo y de ruido artificial (tráfico, sirenas, motores) y se convierten en horas con resíntesis granular, sin loops.
+- Si una capa obligatoria no tiene grabación usable, esa receta no se produce ese día y el selector elige otra. El colchón de 2 días cubre una caída de Freesound.
 - Quality check: loudness, true peak, clipping, silencios, loops (autocorrelación) y clics en uniones.
 
 **Video.**

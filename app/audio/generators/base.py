@@ -1,48 +1,12 @@
 from __future__ import annotations
 
-import math
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
 import numpy as np
-from scipy import signal
-
-from app.audio.processor.filters import SosFilter, butter_sos, resonator_sos
 
 NOMINAL_RMS = 0.1
 CALIBRATION_SECONDS = 10.0
-
-# Paul Kellet / RBJ 3-pole pink noise approximation (-3 dB/oct, ±0.3 dB above 10 Hz).
-PINK_B = np.array([0.049922035, -0.095993537, 0.050612699, -0.004408786])
-PINK_A = np.array([1.0, -2.494956002, 2.017265875, -0.522189400])
-
-
-class NoiseSource:
-    """Stereo white/pink/brown noise with adjustable inter-channel correlation."""
-
-    def __init__(self, rng: np.random.Generator, sample_rate: int, color: str = "white", width: float = 1.0):
-        if color not in ("white", "pink", "brown"):
-            raise ValueError(f"unknown noise color {color}")
-        self.rng = rng
-        self.color = color
-        self.width = float(np.clip(width, 0.0, 1.0))
-        self.zi_pink = np.zeros((3, 2))
-        self.zi_brown = np.zeros((1, 2))
-        self.brown_hp = SosFilter(butter_sos(sample_rate, "highpass", 20.0, 1))
-
-    def __call__(self, frames: int) -> np.ndarray:
-        raw = self.rng.standard_normal((frames, 2))
-        mid = (raw[:, 0] + raw[:, 1]) / math.sqrt(2)
-        side = (raw[:, 0] - raw[:, 1]) / math.sqrt(2) * self.width
-        norm = math.sqrt(2 / (1 + self.width**2))
-        white = np.column_stack([mid + side, mid - side]) / math.sqrt(2) * norm
-        if self.color == "white":
-            return white
-        if self.color == "pink":
-            out, self.zi_pink = signal.lfilter(PINK_B, PINK_A, white, axis=0, zi=self.zi_pink)
-            return out * 8.0
-        out, self.zi_brown = signal.lfilter([1.0], [1.0, -0.998], white, axis=0, zi=self.zi_brown)
-        return self.brown_hp(out) * 0.08
 
 
 class SmoothRandom:
@@ -77,48 +41,6 @@ class SmoothRandom:
         t = (index - self.positions[seg]) / (self.positions[seg + 1] - self.positions[seg])
         blend = (1 - np.cos(np.pi * t)) / 2
         return self.values[seg] + (self.values[seg + 1] - self.values[seg]) * blend
-
-
-class ImpulseBank:
-    """Poisson impulses routed to a bank of resonators (drops, crackles, taps, bubbles)."""
-
-    def __init__(
-        self,
-        rng: np.random.Generator,
-        sample_rate: int,
-        freqs: np.ndarray,
-        q: np.ndarray | float,
-        pareto_shape: float = 2.5,
-        width: float = 1.0,
-    ):
-        self.rng = rng
-        self.sample_rate = sample_rate
-        qs = np.broadcast_to(np.asarray(q, dtype=float), freqs.shape)
-        self.filters = [SosFilter(resonator_sos(sample_rate, f, qv)) for f, qv in zip(freqs, qs, strict=True)]
-        self.pareto_shape = pareto_shape
-        self.width = width
-
-    def __call__(self, frames: int, rate_hz: np.ndarray | float) -> np.ndarray:
-        rate = np.broadcast_to(np.asarray(rate_hz, dtype=float), (frames,))
-        expected = rate / self.sample_rate
-        count = self.rng.poisson(float(expected.sum()))
-        out = np.zeros((frames, 2))
-        if count:
-            cdf = np.cumsum(expected)
-            positions = np.minimum(np.searchsorted(cdf, self.rng.uniform(0, cdf[-1], count)), frames - 1)
-            amps = (self.rng.pareto(self.pareto_shape, count) + 1) * self.rng.choice([-1.0, 1.0], count)
-            angle = (self.rng.uniform(-self.width, self.width, count) + 1) * math.pi / 4
-            which = self.rng.integers(0, len(self.filters), count)
-        excitation = np.zeros((frames, 2))
-        for idx, filt in enumerate(self.filters):
-            # Filters run even without impulses so their ringing state continues across blocks.
-            excitation.fill(0.0)
-            if count:
-                mask = which == idx
-                np.add.at(excitation[:, 0], positions[mask], amps[mask] * np.cos(angle[mask]))
-                np.add.at(excitation[:, 1], positions[mask], amps[mask] * np.sin(angle[mask]))
-            out += filt(excitation)
-        return out
 
 
 class Generator(ABC):

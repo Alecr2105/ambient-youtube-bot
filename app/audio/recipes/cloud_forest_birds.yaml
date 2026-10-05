@@ -5,41 +5,28 @@ keywords: [birds chirping, forest sounds, morning birdsong, cloud forest, nature
 visual_tags: [forest, cloud_forest, morning, birds, jungle]
 costa_rica_eligible: true
 layers:
-  - name: forest_air
-    source: library
-    library:
-      category: forest_ambience_texture
-      query: rainforest morning
-      min_duration_s: 60
-      max_duration_s: 300
-      count: 2
-      pool_size: 6
-    generator: wind
-    params: {gustiness: [0.2, 0.35], whistle_level: 0.0}
-    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25}
-    gain_db: [-6, -3]
-    automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
-    eq: {highpass_hz: 60}
-  - name: distant_stream
-    generator: river
-    params: {flow: [0.3, 0.5], bubbles_per_second: [25, 50], bubble_level: 0.3, rumble_level: 0.2}
-    gain_db: [-16, -11]
-    automation: {depth_db: 1.5, min_period_s: 60, max_period_s: 240}
-    eq: {lowpass_hz: 3500}
+- name: forest_air
+  library: {category: forest_ambience_texture, query: rainforest morning, min_duration_s: 60, max_duration_s: 300, count: 3,
+    pool_size: 8}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.0}
+  gain_db: [-1, 0]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 40}
+- name: dawn
+  library: {category: dawn_chorus_texture, query: dawn chorus, min_duration_s: 60, max_duration_s: 300, count: 3, pool_size: 8}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.0}
+  gain_db: [-6, -3]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 40}
 events:
-  - name: birds
-    source: library
-    library:
-      category: birdsong_events
-      query: bird chirp
-      min_duration_s: 1.5
-      max_duration_s: 20
-      count: 12
-      pool_size: 30
-    pitch_cents: 60
-    required: true
-    rate_per_hour: [120, 260]
-    gain_db: [-16, -6]
-    min_gap_s: 3
-    intensity_rate_scale: 0.6
+- name: birds
+  library: {category: birdsong_events, query: bird song, min_duration_s: 2, max_duration_s: 20, count: 12, pool_size: 30}
+  pitch_cents: 40
+  required: false
+  rate_per_hour: [80, 180]
+  gain_db: [-18, -9]
+  min_gap_s: 4
+  intensity_rate_scale: 0.5
 intensity: {min_period_s: 600, max_period_s: 1800}

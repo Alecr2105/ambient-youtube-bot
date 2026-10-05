@@ -78,4 +78,4 @@ En `MODE=test` nada se sube; el video queda en `output/<video_id>/` con su `lice
 ## 4. Lo que sigue bloqueado por fuera del material
 
 - **Publicación automática**: desbloqueada — Google aprobó la auditoría el 2026-09-20. Para que el scheduler publique solo falta poner `MODE=production` en `.env`.
-- **Capas de audio con grabaciones reales** (pájaros, burbujeo del río, fuego con carácter): faltan las credenciales de Freesound. Sin ellas el bot usa solo síntesis procedural, que ya pasa el quality gate pero suena más plano en esas capas. Cuando quieras: crear cuenta en freesound.org → *Settings → API credentials → New credentials* y correr `python main.py freesound-auth`.
+- **Audio**: resuelto. Todo el audio sale de grabaciones reales CC0 de Freesound (credenciales configuradas el 2026-10-04). Tus propias grabaciones de campo serían todavía mejores: van en `assets/audio_own/<categoría>/`.

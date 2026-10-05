@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import soundfile as sf
@@ -20,9 +22,16 @@ def test_all_recipes_are_valid():
     assert len({r.slug for r in recipes}) == len(recipes)
 
 
-def test_recipe_rejects_unknown_generator():
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda layer: layer.update(generator="rain"),  # synthetic sound is no longer accepted
+        lambda layer: layer.pop("library"),  # every layer must come from real recordings
+    ],
+)
+def test_recipe_accepts_only_recorded_sound(change):
     data = load_recipe("fireplace").model_dump()
-    data["layers"][0]["generator"] = "dragon"
+    change(data["layers"][0])
     with pytest.raises(ValidationError):
         Recipe.model_validate(data)
 
@@ -47,14 +56,41 @@ def test_events_are_irregular_and_respect_gap():
     assert gaps.std() / gaps.mean() > 0.4
 
 
+def recording(path: Path, seconds: float, seed: int, decay: bool = False) -> str:
+    """A stand-in for a downloaded recording: band-limited noise (or a decaying burst for events)."""
+    rng = np.random.default_rng(seed)
+    audio = rng.standard_normal((int(SR * seconds), 2))
+    audio = np.cumsum(audio, axis=0) * 0.02
+    audio -= np.convolve(audio[:, 0], np.ones(480) / 480, mode="same")[:, None]
+    if decay:
+        audio *= np.exp(-np.linspace(0, 6, len(audio)))[:, None]
+    audio *= 0.3 / np.abs(audio).max()
+    sf.write(path, audio.astype(np.float32), SR, subtype="PCM_24")
+    return str(path)
+
+
+def resolve_with_recordings(recipe: Recipe, instance: dict, folder: Path) -> dict:
+    """What the source selector does once it has picked catalog recordings."""
+    textures = [recording(folder / f"texture{i}.wav", 70, seed=i) for i in range(2)]
+    events = [recording(folder / f"event{i}.wav", 4, seed=10 + i, decay=True) for i in range(2)]
+    for spec, layer in zip(recipe.layers, instance["layers"], strict=True):
+        layer["generator"] = "granular"
+        layer["params"] = {**spec.granular.model_dump(), "sources": textures}
+    for spec, event in zip(recipe.events, instance["events"], strict=True):
+        event["generator"] = "sample"
+        event["params"] = {"sources": events, "pitch_cents": spec.pitch_cents}
+    return instance
+
+
 @pytest.fixture(scope="module")
 def rendered(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("render")
     recipe = load_recipe("thunderstorm")
     results = {}
     for seed in (101, 202):
+        instance = resolve_with_recordings(recipe, instantiate(recipe, seed), tmp)
         results[seed] = render_program(
-            recipe, instantiate(recipe, seed), 90, SR, -18.0, -1.0, tmp / f"work{seed}", tmp / f"{seed}.flac", block_seconds=5
+            recipe, instance, 90, SR, -18.0, -1.0, tmp / f"work{seed}", tmp / f"{seed}.flac", block_seconds=5
         )
     return results
 

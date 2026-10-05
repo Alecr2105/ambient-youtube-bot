@@ -1,34 +1,22 @@
 slug: jungle_night
 name: Rainforest Night with Frogs and Insects
 subniches: [sleep, relaxation]
-keywords: [jungle sounds, rainforest sounds at night, night ambience, frogs and crickets, nature sounds for sleeping, costa rica]
+keywords: [jungle sounds, rainforest sounds at night, night ambience, frogs and crickets, nature sounds for sleeping, costa
+    rica]
 visual_tags: [night, jungle, rainforest]
 costa_rica_eligible: true
 layers:
-  - name: night_chorus
-    source: library
-    library:
-      category: jungle_night_texture
-      query: rainforest night
-      min_duration_s: 60
-      max_duration_s: 300
-      count: 2
-      pool_size: 6
-    generator: crickets
-    params: {individuals: [5, 9], chorus_level: [0.3, 0.45]}
-    granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 20}
-    gain_db: [-3, 0]
-    automation: {depth_db: 2.0, min_period_s: 40, max_period_s: 200}
-    eq: {highpass_hz: 50}
-  - name: crickets
-    generator: crickets
-    params: {individuals: [3, 6], chorus_level: [0.1, 0.2]}
-    gain_db: [-12, -8]
-    automation: {depth_db: 2.0, min_period_s: 40, max_period_s: 200}
-    eq: {highpass_hz: 1500}
-  - name: night_breeze
-    generator: wind
-    params: {gustiness: [0.2, 0.4], whistle_level: 0.0}
-    gain_db: [-14, -10]
-    automation: {depth_db: 2.5, min_period_s: 25, max_period_s: 120}
-    eq: {lowpass_hz: 1800}
+- name: chorus
+  library: {category: jungle_night_texture, query: rainforest night, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 10}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-1, 0]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 40}
+- name: frogs
+  library: {category: frogs_night_texture, query: frogs night, min_duration_s: 60, max_duration_s: 300, count: 3, pool_size: 8}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15}
+  gain_db: [-7, -4]
+  automation: {depth_db: 1.5, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.5
+  eq: {highpass_hz: 40}

@@ -11,7 +11,7 @@ import numpy as np
 import soundfile as sf
 
 from app.audio.generators.base import Generator, SmoothRandom
-from app.audio.generators.registry import ALL_LAYER_GENERATORS, EVENT_GENERATORS
+from app.audio.generators.registry import EVENT_GENERATORS, LAYER_GENERATORS
 from app.audio.mixer.events import EventOccurrence, schedule_events
 from app.audio.processor.dynamics import Compressor, TruePeakLimiter, db_to_gain, fade_gains
 from app.audio.processor.filters import FilterChain, SosFilter, biquad_high_shelf, biquad_low_shelf, butter_sos
@@ -96,7 +96,7 @@ class Mixer:
             if resolved.get("skipped"):
                 continue
             generator_seed, automation_seed = seed.spawn(2)
-            generator = ALL_LAYER_GENERATORS[resolved["generator"]].create(sample_rate, generator_seed, duration_s, **resolved["params"])
+            generator = LAYER_GENERATORS[resolved["generator"]].create(sample_rate, generator_seed, duration_s, **resolved["params"])
             automation = SmoothRandom(
                 np.random.default_rng(automation_seed), sample_rate, duration_s,
                 spec.automation.min_period_s, spec.automation.max_period_s,
