@@ -71,10 +71,6 @@ class SuggestClient:
         return suggestions
 
 
-def _tokens(text: str) -> set[str]:
-    return {t for t in text.lower().replace("&", " ").split() if len(t) > 2}
-
-
 # Words allowed in a researched term besides the recipe's own vocabulary. A whitelist, because
 # suggestions carry misleading claims ("black screen", "no ads") and news/music noise that would
 # make metadata deceptive under YouTube's spam policies.

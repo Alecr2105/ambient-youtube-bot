@@ -20,7 +20,6 @@ from typing import Any
 from app.audio.providers.base import FetchedSound, ProviderUnavailableError, SoundCandidate, SoundQuery, SoundUnusableError
 from app.audio.providers.normalize import normalize_to_flac, sha256_file
 from app.licensing.licenses import CANONICAL_URLS, LicenseRecord, normalize_license
-from app.utils.config import LicenseType
 
 log = logging.getLogger(__name__)
 
@@ -163,9 +162,6 @@ class FreesoundProvider:
             extra={"raw_license": candidate.raw_license},
         )
 
-    def cost_estimate(self, query: SoundQuery) -> float:
-        return 0.0
-
     # --- OAuth2 -----------------------------------------------------------
 
     def authorize_url(self, state: str = "ambient_bot") -> str:
@@ -232,6 +228,3 @@ class FreesoundProvider:
                 raise SoundUnusableError(f"freesound {candidate.asset_id}: cannot decode ({exc})") from exc
         return FetchedSound(candidate, target, sha256_file(original), record)
 
-
-def is_cc0(record: LicenseRecord | None) -> bool:
-    return record is not None and record.license_type is LicenseType.CC0

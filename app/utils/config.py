@@ -141,12 +141,6 @@ class Settings(BaseSettings):
     freesound_api_key: str | None = None
     freesound_client_id: str | None = None
     freesound_token_path: Path | None = None
-    pixabay_api_key: str | None = None
-    ai_audio_provider: str = "none"
-    ai_audio_api_key: str | None = None
-
-    llm_provider: str = "none"
-    llm_api_key: str | None = None
 
     max_retries: int = Field(3, ge=0, le=20)
     backoff_base: float = Field(60.0, gt=0)
@@ -171,9 +165,6 @@ class Settings(BaseSettings):
         "freesound_api_key",
         "freesound_client_id",
         "freesound_token_path",
-        "pixabay_api_key",
-        "ai_audio_api_key",
-        "llm_api_key",
         mode="before",
     )
     @classmethod

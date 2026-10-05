@@ -56,9 +56,6 @@ class OwnRecordingsProvider:
             normalize_to_flac(source, target)
         return FetchedSound(candidate, target, checksum, self.license_info(candidate))
 
-    def cost_estimate(self, query: SoundQuery) -> float:
-        return 0.0
-
 
 def manual_candidate(path: Path, license_type: LicenseType, source_url: str, author: str, title: str | None = None) -> SoundCandidate:
     """A sound the owner downloaded by hand (e.g. from Pixabay) and vouches for."""
