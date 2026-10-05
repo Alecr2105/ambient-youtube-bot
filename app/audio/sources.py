@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.audio import catalog
 from app.audio.catalog import CatalogSound
 from app.audio.generators.granular import _load
+from app.audio.processor.loudness import loudness_profile
 from app.audio.providers.base import AudioProvider, ProviderUnavailableError, SoundQuery, SoundUnusableError
 from app.audio.providers.provenance import assess_metadata, speech_likelihood, unwanted_content
 from app.audio.recipe import Event, Layer, LibrarySpec, Recipe
@@ -31,6 +32,9 @@ log = logging.getLogger(__name__)
 
 MAX_DOWNLOADS_PER_ITEM = 4
 SPEECH_REJECT_THRESHOLD = 0.25
+# A texture is a bed heard for hours: its loudest 3 s may not stand out from its usual level by
+# more than this. Steady rain measured +3.8 to +4.2 LU; takes with thunder or gusts +8 to +15.
+TEXTURE_MAX_SPREAD_LU = 6.0
 
 ProviderFactory = Callable[[str, LibrarySpec], AudioProvider | None]
 
@@ -138,7 +142,7 @@ class SourceSelector:
                 except SoundUnusableError as exc:
                     log.info("rejected %s", exc)
                     continue
-                speech = 0.0
+                features: dict[str, float] = {}
                 if kind == "texture":
                     try:
                         audio = np.asarray(_load(str(fetched.local_path), 48000))
@@ -149,7 +153,15 @@ class SourceSelector:
                     if speech > SPEECH_REJECT_THRESHOLD:
                         log.info("rejected %s/%s: speech-like modulation %.2f", provider_name, candidate.asset_id, speech)
                         continue
+                    _level, spread = loudness_profile(audio, 48000)
+                    if spread > TEXTURE_MAX_SPREAD_LU:
+                        # A "rain" take with a thunder clap, a gust or a door in it: fine to listen to once,
+                        # wrong as a bed that is cut into grains and heard for hours.
+                        log.info("rejected %s/%s: uneven texture, loudest 3 s +%.1f LU above its usual level",
+                                 provider_name, candidate.asset_id, spread)
+                        continue
+                    features = {"speech_likelihood": speech, "loudness_spread_lu": round(spread, 2)}
                 fetched.license = replace(license_record, provenance_notes=notes)
-                catalog.register(self.session, fetched, library.category, kind, self.validator, {"speech_likelihood": speech})
+                catalog.register(self.session, fetched, library.category, kind, self.validator, features)
                 wanted -= 1
                 log.info("catalogued %s/%s for %s", provider_name, candidate.asset_id, library.category)

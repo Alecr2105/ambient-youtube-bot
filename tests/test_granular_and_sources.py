@@ -172,3 +172,66 @@ def test_required_event_without_sources_fails_but_optional_is_skipped(db, tmp_pa
         SourceSelector(session, only_textures, VALIDATOR, tmp_path / "cache", 4).resolve(optional, instance)
     assert instance["events"][0].get("skipped") is True
     assert instance["layers"][0]["generator"] == "granular"
+
+
+def with_burst(path: Path, seconds: float, seed: int, burst_db: float) -> Path:
+    """A steady take with three loud seconds in the middle, like rain with one thunder clap in it."""
+    texture_file(path, seconds, seed)
+    audio, _ = sf.read(path, always_2d=True)
+    middle = len(audio) // 2
+    audio[middle : middle + SR * 3] *= 10 ** (burst_db / 20)
+    sf.write(path, audio / max(1.0, np.abs(audio).max() / 0.9), SR, subtype="PCM_24")
+    return path
+
+
+def test_loudness_profile_reports_usual_level_and_the_loudest_moment(tmp_path):
+    from app.audio.processor.loudness import loudness_profile
+
+    steady, _ = sf.read(texture_file(tmp_path / "steady.wav", 60, 1), always_2d=True)
+    stormy, _ = sf.read(with_burst(tmp_path / "stormy.wav", 60, 1, burst_db=14), always_2d=True)
+    steady_level, steady_spread = loudness_profile(steady, SR)
+    _stormy_level, stormy_spread = loudness_profile(stormy, SR)
+    assert steady_spread < 3 < 10 < stormy_spread
+    quieter_level, _ = loudness_profile(steady * 0.1, SR)
+    assert quieter_level == pytest.approx(steady_level - 20, abs=0.1)
+
+
+class BurstProvider(FakeProvider):
+    """Candidate 0 is a steady take; candidate 1 has a thunder clap in the middle."""
+
+    def fetch(self, candidate, cache_dir):
+        raw = self.tmp / f"raw{candidate.asset_id}.wav"
+        if candidate.asset_id == "1":
+            with_burst(raw, 90, 11, burst_db=14)
+        else:
+            texture_file(raw, 90, 10)
+        target = cache_dir / f"{candidate.asset_id}.flac"
+        normalize_to_flac(raw, target)
+        self.fetched.append(candidate.asset_id)
+        return FetchedSound(candidate, target, sha256_file(raw), self.license_info(candidate))
+
+
+def test_uneven_texture_is_never_catalogued(db, tmp_path):
+    recipe = one_layer("rain_window_real")
+    provider = BurstProvider(tmp_path, ["Creative Commons 0"] * 2)
+    instance = instantiate(recipe, 6)
+    with session_scope(db) as session:
+        SourceSelector(session, lambda n, l: provider if n == "freesound" else None, VALIDATOR,
+                       tmp_path / "cache", 6).resolve(recipe, instance)
+        kept = catalog.find(session, "rain_window_texture", "texture", VALIDATOR)
+    assert provider.fetched == ["0", "1"]  # both measured...
+    assert [s.asset_id for s in kept] == ["0"]  # ...only the steady one is used
+
+
+def test_granular_matches_recordings_by_level_so_switching_takes_is_not_a_swell(tmp_path):
+    from app.audio.processor.loudness import loudness_profile
+
+    loud = texture_file(tmp_path / "loud.wav", 60, 3)
+    quiet_audio, _ = sf.read(texture_file(tmp_path / "quiet_src.wav", 60, 4), always_2d=True)
+    quiet = tmp_path / "quiet.wav"
+    sf.write(quiet, quiet_audio * 10 ** (-18 / 20), SR, subtype="PCM_24")  # an 18 dB quieter take
+    generator = GranularTexture.create(SR, np.random.SeedSequence(8), 300, sources=[str(loud), str(quiet)],
+                                       grain_min_s=8, grain_max_s=12)
+    audio = np.concatenate([generator.render(SR * 10) for _ in range(18)])
+    _level, spread = loudness_profile(audio, SR)
+    assert spread < 4  # with RMS-free, level-matched grains there are no 18 dB swells between takes

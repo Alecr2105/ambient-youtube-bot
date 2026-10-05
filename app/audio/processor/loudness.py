@@ -59,6 +59,34 @@ class LoudnessMeter:
         return -0.691 + 10 * math.log10(z[gated].mean())
 
 
+SHORT_TERM_WINDOW_S = 3.0
+
+
+def short_term_loudness(meter: LoudnessMeter, window_s: float = SHORT_TERM_WINDOW_S) -> np.ndarray:
+    """BS.1770-4 short-term loudness (sliding `window_s`, 100 ms hop) from a fed meter."""
+    energy = np.asarray(meter.segment_energy)
+    window = int(round(window_s / 0.1))
+    if len(energy) < window:
+        return np.array([])
+    mean = np.convolve(energy, np.ones(window), mode="valid") / (window * meter.segment)
+    with np.errstate(divide="ignore"):
+        values = -0.691 + 10 * np.log10(mean)
+    return values[np.isfinite(values)]
+
+
+def loudness_profile(audio: np.ndarray, sample_rate: int) -> tuple[float, float]:
+    """(usual level, how far the loudest 3 s sits above it) of a recording, both from short-term
+    loudness. The median is the level a listener hears most of the time, so it is the right thing to
+    match recordings by; unlike RMS it is not inflated by one thunder clap."""
+    meter = LoudnessMeter(sample_rate, audio.shape[1])
+    meter.add(np.asarray(audio, dtype=np.float64))
+    values = short_term_loudness(meter)
+    if values.size == 0:
+        return -math.inf, 0.0
+    median = float(np.median(values))
+    return median, float(values.max() - median)
+
+
 def true_peak_per_sample(block: np.ndarray) -> np.ndarray:
     """Max absolute value of the 4x oversampled signal, folded back to one value per input sample."""
     upsampled = signal.resample_poly(block, TRUE_PEAK_OVERSAMPLE, 1, axis=0)

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from app.audio.processor.loudness import LoudnessMeter, TruePeakMeter
+from app.audio.processor.loudness import LoudnessMeter, TruePeakMeter, short_term_loudness
 from app.quality.report import QualityReport
 
 FEATURE_HOP_S = 0.1
@@ -34,19 +34,6 @@ class AudioThresholds:
     max_short_term_jump_lu: float | None = None
 
 
-SHORT_TERM_WINDOW_S = 3.0
-
-
-def short_term_loudness(meter: LoudnessMeter, window_s: float = SHORT_TERM_WINDOW_S) -> np.ndarray:
-    """BS.1770-4 short-term loudness (sliding `window_s`, 100 ms hop) from a fed meter."""
-    energy = np.asarray(meter.segment_energy)
-    window = int(round(window_s / 0.1))
-    if len(energy) < window:
-        return np.array([])
-    mean = np.convolve(energy, np.ones(window), mode="valid") / (window * meter.segment)
-    with np.errstate(divide="ignore"):
-        values = -0.691 + 10 * np.log10(mean)
-    return values[np.isfinite(values)]
 
 
 class _FeatureExtractor:

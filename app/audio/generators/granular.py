@@ -10,8 +10,10 @@ import soundfile as sf
 from scipy import signal
 
 from app.audio.generators.base import EventGenerator, Generator
+from app.audio.processor.loudness import loudness_profile
 
 MAX_PLACEMENT_TRIES = 12
+REFERENCE_LUFS = -30.0  # sources are matched to this; the generator's calibration sets the final level
 
 
 @lru_cache(maxsize=48)
@@ -24,6 +26,11 @@ def _load(path: str, sample_rate: int) -> np.ndarray:
     audio = audio[:, :2]
     audio.setflags(write=False)
     return audio
+
+
+@lru_cache(maxsize=48)
+def _profile(path: str, sample_rate: int) -> tuple[float, float]:
+    return loudness_profile(_load(path, sample_rate), sample_rate)
 
 
 def _repitch(segment: np.ndarray, cents: float) -> np.ndarray:
@@ -64,9 +71,11 @@ class GranularTexture(Generator):
             audio = _load(str(path), sr)
             if len(audio) < margin:
                 continue
-            rms = float(np.sqrt(np.mean(np.square(audio, dtype=np.float64))))
-            if rms > 1e-6:
-                self.sources.append((audio, 0.1 / rms))
+            # Match recordings by the level they are heard at most of the time, so moving from a quiet
+            # take to a loud one is not a swell; RMS would be skewed by any single loud moment.
+            level, _spread = _profile(str(path), sr)
+            if math.isfinite(level):
+                self.sources.append((audio, 10 ** ((REFERENCE_LUFS - level) / 20)))
         if not self.sources:
             raise ValueError("no source long enough for granular synthesis")
         self.pitch_cents = pitch_cents
