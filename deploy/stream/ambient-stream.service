@@ -1,0 +1,16 @@
+[Unit]
+Description=Costa Rica Ambience 24/7 YouTube live stream
+After=network-online.target
+Wants=network-online.target
+# Holds YOUTUBE_STREAM_KEY (root only, chmod 600). Without it the service stays inactive.
+ConditionPathExists=/etc/ambient-stream.env
+
+[Service]
+User=ubuntu
+EnvironmentFile=/etc/ambient-stream.env
+ExecStart=/home/ubuntu/stream/stream.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

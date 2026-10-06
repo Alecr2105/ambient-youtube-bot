@@ -3,8 +3,8 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1 -Uninstall
 #
-# The task starts `main.py run-scheduler` when you log on, may wake the computer, restarts on
-# failure and never stops because of battery. Keep the laptop plugged in and set Windows to not
+# The task starts `main.py run-scheduler` when you log on and every 15 minutes if it is not
+# running, may wake the computer and never stops because of battery. Keep the laptop plugged in and set Windows to not
 # sleep while plugged in, or at least allow wake timers (Power Options > Sleep > Allow wake timers).
 
 param([switch]$Uninstall)
@@ -23,7 +23,11 @@ if ($Uninstall) {
 if (-not (Test-Path $Python)) { throw "Python venv not found at $Python" }
 
 $action = New-ScheduledTaskAction -Execute $Python -Argument "main.py run-scheduler" -WorkingDirectory $Root
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+# "Restart on failure" only covers a task that fails to start, not a worker that dies later
+# (e.g. killed when the laptop wakes from sleep). The repeating trigger is a watchdog: every
+# 15 minutes it starts the worker again, and IgnoreNew makes it a no-op while one is running.
+$watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 15)
+$trigger = @((New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME), $watchdog)
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -WakeToRun -StartWhenAvailable `
     -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 5) `
