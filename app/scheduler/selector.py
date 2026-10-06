@@ -19,6 +19,7 @@ from app.utils.config import Settings
 from app.visuals.matcher import NoMatchingVisualsError, choose_visuals
 
 NO_REPEAT_DAYS = 4
+NO_REPEAT_DAYS_MUSIC = 1
 WINTER_MONTHS = {11, 12, 1, 2}
 COZY_WORDS = {"fire", "fireplace", "cabin", "cozy"}
 
@@ -89,16 +90,21 @@ def choose_plan(session: Session, settings: Settings, day: date, seed: int | Non
     seed = seed if seed is not None else secrets.randbits(32)
     rng = np.random.default_rng(np.random.SeedSequence([seed, day.toordinal()]))
     blocked = recent_slugs(session, day, NO_REPEAT_DAYS) | set(exclude)
+    # Lofi recipes differ only in the ambience under new music: just never the same one two days running.
+    blocked_music = recent_slugs(session, day, NO_REPEAT_DAYS_MUSIC) | set(exclude)
     performance = performance_factors(session, day)
     scored = []
     for recipe in all_recipes():
-        if not recipe.enabled or recipe.slug in blocked:
+        if (recipe.music is not None) != settings.music_mode:
+            continue  # MUSIC_MODE picks the format: lofi music over ambience, or ambience alone
+        if not recipe.enabled or recipe.slug in (blocked_music if recipe.music else blocked):
             continue
         try:
             visuals = choose_visuals(session, recipe.visual_tags)
         except NoMatchingVisualsError:
             continue
-        if recent_concept_repeats(session, recipe.slug, [v.id for v in visuals], day):
+        # With music every video is new music; the same scene is the channel's look, not a repeat.
+        if recipe.music is None and recent_concept_repeats(session, recipe.slug, [v.id for v in visuals], day):
             continue
         scored.append((score_recipe(recipe, settings, day, rng, performance), recipe))
     if not scored:

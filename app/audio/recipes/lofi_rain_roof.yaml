@@ -1,0 +1,24 @@
+slug: lofi_rain_roof
+name: Lofi Rain on the Roof
+subniches: [study, relaxation]
+keywords: [lofi rain, cozy lofi, lofi music for study, rain and lofi, chill guitar lofi]
+visual_tags: [rain, roof, zinc]
+costa_rica_eligible: true
+# Generated lofi music over the rain_on_roof ambience, kept 15 LU below.
+music: {bed_below_lu: 15}
+layers:
+- name: roof
+  library: {category: rain_roof_texture, query: rain roof, min_duration_s: 60, max_duration_s: 300, count: 4, pool_size: 12}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15, gain_jitter_db: 0.75}
+  gain_db: [-1, 0]
+  automation: {depth_db: 1.0, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.0
+  eq: {highpass_hz: 45}
+- name: metal_roof
+  library: {category: rain_metal_roof_texture, query: rain metal roof, min_duration_s: 60, max_duration_s: 300, count: 2,
+    pool_size: 6}
+  granular: {grain_min_s: 8, grain_max_s: 30, crossfade_s: 5, pitch_cents: 25, reverse_probability: 0.15, gain_jitter_db: 0.75}
+  gain_db: [-7, -4]
+  automation: {depth_db: 1.0, min_period_s: 40, max_period_s: 200}
+  intensity_depth_db: 1.0
+  eq: {highpass_hz: 45}

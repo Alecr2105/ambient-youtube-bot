@@ -311,6 +311,18 @@ def cmd_upload(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stream_sync(_args: argparse.Namespace) -> int:
+    from app.stream.sync import stream_enabled, sync_stream
+
+    settings = get_settings()
+    if not stream_enabled(settings):
+        print("ORACLE_HOST is not set in .env; the live stream is off")
+        return 1
+    sent = sync_stream(settings, _engine())
+    print(f"sent to the live stream: {', '.join(sent) if sent else 'nothing new'}")
+    return 0
+
+
 def cmd_run_scheduler(_args: argparse.Namespace) -> int:
     from app.scheduler.service import run_scheduler
 
@@ -444,6 +456,7 @@ def build_parser() -> argparse.ArgumentParser:
     upload.add_argument("--video-id", required=True)
     upload.set_defaults(func=cmd_upload)
 
+    sub.add_parser("stream-sync", help="send uploaded videos that the 24/7 live stream does not have yet").set_defaults(func=cmd_stream_sync)
     sub.add_parser("run-scheduler", help="run the daily scheduler worker").set_defaults(func=cmd_run_scheduler)
     sub.add_parser("pause", help="pause automation").set_defaults(func=lambda a: cmd_command("pause"))
     sub.add_parser("resume", help="resume automation").set_defaults(func=lambda a: cmd_command("resume"))

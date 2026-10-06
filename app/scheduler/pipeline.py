@@ -46,10 +46,11 @@ from app.thumbnails.generator import generate_thumbnails
 from app.utils import ffmpeg
 from app.utils.config import LicenseType, Mode, Settings, VisualMotion
 from app.utils.costs import UsageLedger
-from app.video.plan import is_still, plan_timeline, plan_variants
+from app.video.plan import is_animated, is_still, plan_timeline, plan_variants
 from app.audio.produce import study_jump_limit
-from app.video.produce import EDGE_S, variant_plan_for
+from app.video.produce import EDGE_S, bitrate_for, variant_plan_for
 from app.video.render import VideoFormat, render_video
+from app.visuals.loops import with_prepared_loops
 from app.visuals.matcher import NoMatchingVisualsError, VisualChoice, choose_visuals, mark_used
 
 log = logging.getLogger(__name__)
@@ -102,7 +103,8 @@ class Context:
 def _ensure_fresh_concept(ctx: Context) -> list[VisualChoice]:
     with session_scope(ctx.engine) as session:
         visuals = choose_visuals(session, ctx.recipe.visual_tags)
-        repeats = recent_concept_repeats(session, ctx.recipe.slug, [v.id for v in visuals], ctx.publish_date, exclude_video_id=ctx.video_id)
+        # New music in every video: the same scene and ambience are a channel look, not a repeat.
+        repeats = [] if ctx.recipe.music else recent_concept_repeats(session, ctx.recipe.slug, [v.id for v in visuals], ctx.publish_date, exclude_video_id=ctx.video_id)
     if repeats:
         raise ContentError(f"same recipe and footage used recently by {repeats}; needs other footage or another recipe")
     return visuals
@@ -148,22 +150,75 @@ def stage_audio_sources(ctx: Context) -> dict:
 
 def stage_audio_render(ctx: Context) -> dict:
     s = ctx.settings
+    # With music the ambience is a bed: rendered and mastered exactly as on its own, then mixed below the music.
+    target = ctx.work / "bed.flac" if ctx.recipe.music else ctx.out / "audio.flac"
     result = render_program(ctx.recipe, ctx.read_json("recipe_instance.json"), ctx.duration, s.audio_sample_rate,
-                            s.target_lufs, s.target_true_peak, ctx.work / "audio", ctx.out / "audio.flac")
-    ctx.write_json("audio_render.json", {"events": result.events, "junctions_s": result.junctions_s, "timings": result.timings,
-                                         "integrated_lufs": result.integrated_lufs, "true_peak_dbtp": result.true_peak_dbtp})
+                            s.target_lufs, s.target_true_peak, ctx.work / "audio", target)
+    render = {"events": result.events, "junctions_s": result.junctions_s, "timings": result.timings,
+              "integrated_lufs": result.integrated_lufs, "true_peak_dbtp": result.true_peak_dbtp}
+    if ctx.recipe.music:
+        render |= _add_music(ctx, target)
+    ctx.write_json("audio_render.json", render)
     return result.timings
+
+
+def _add_music(ctx: Context, bed: Path) -> dict:
+    from app.music import lofi
+
+    s, music = ctx.settings, ctx.recipe.music
+    plans = lofi.plan_tracks(ctx.duration, s.music_track_seconds, s.music_crossfade_seconds, music.styles, ctx.seed)
+    started = time.perf_counter()
+    try:
+        tracks, music_junctions = lofi.produce_music(
+            ffmpeg.require_binary("ffmpeg", s.ffmpeg_path), s.comfyui_dir, s.comfyui_url, plans, bed, music.bed_below_lu,
+            ctx.duration, s.music_track_seconds, s.music_crossfade_seconds, s.target_lufs, s.audio_sample_rate,
+            ctx.work / "music", ctx.out / "audio.flac",
+        )
+    except lofi.MusicError as exc:
+        raise ContentError(str(exc)) from exc
+    ctx.write_json("music.json", {"model": lofi.MODEL_NAME, "license": lofi.MODEL_LICENSE, "model_url": lofi.MODEL_URL,
+                                  "bed_below_lu": music.bed_below_lu, "tracks": lofi.describe(tracks)})
+    # The tracks are the channel's own work, made with an Apache-2.0 model: recorded next to the ambience sources.
+    sources = ctx.read_json("sources.json")
+    music_resources = [
+        UsedResource(item=f"music_{t.plan.index:03d}", kind="music", provider="ace-step", asset_id=f"{ctx.video_id}:{t.plan.index}",
+                     license=LicenseRecord(LicenseType.OWN, source_url=None, author="Costa Rica Ambience", title=t.plan.style,
+                                           provenance_notes=f"generated locally by the channel with {lofi.MODEL_NAME} "
+                                                            f"({lofi.MODEL_LICENSE}, {lofi.MODEL_URL}); seed {t.plan.seed}; prompt: {t.plan.tags}"))
+        for t in tracks
+    ]
+    resources = _resources_from_json(sources["resources"]) + music_resources
+    sources["resources"] = _resources_to_json(resources)
+    ctx.write_json("sources.json", sources)
+    validator = LicenseValidator(s.allowed_licenses)
+    report = build_license_report(ctx.video_id, resources, validator)
+    if not report.valid:
+        raise ContentError("license validation failed for the music tracks")
+    report.write(ctx.out / "licenses.json")
+    return {"music_tracks": len(tracks), "music_junctions_s": music_junctions, "music_s": round(time.perf_counter() - started, 1)}
 
 
 def stage_audio_check(ctx: Context) -> dict:
     s = ctx.settings
-    junctions = ctx.read_json("audio_render.json")["junctions_s"]
+    render = ctx.read_json("audio_render.json")
+    junctions = render["junctions_s"]
     if len(junctions) > 400:
         junctions = [junctions[i] for i in np.linspace(0, len(junctions) - 1, 400).astype(int)]
     thresholds = AudioThresholds(expected_duration_s=ctx.duration, target_lufs=s.target_lufs,
                                  max_true_peak_dbtp=s.target_true_peak,
                                  max_short_term_jump_lu=study_jump_limit(ctx.recipe, s))
-    report = check_audio(ctx.out / "audio.flac", thresholds, junctions)
+    if not ctx.recipe.music:
+        report = check_audio(ctx.out / "audio.flac", thresholds, junctions)
+    else:
+        # The ambience bed passes every check it would on its own (loops, clicks, calm)...
+        bed = check_audio(ctx.work / "bed.flac", thresholds, junctions)
+        # ...and the mix is checked as music: a lofi track repeats its bars by design, so no loop
+        # detection; beats rise a little above the usual level, so a wider calm limit.
+        music = AudioThresholds(expected_duration_s=ctx.duration, target_lufs=s.target_lufs, max_true_peak_dbtp=s.target_true_peak,
+                                max_short_term_jump_lu=s.music_max_short_term_jump_lu, loop_max_correlation=1.01)
+        report = check_audio(ctx.out / "audio.flac", music, render.get("music_junctions_s") or None)
+        for check in bed.checks:
+            report.add(f"bed_{check.name}", check.passed, check.value, check.threshold, check.detail)
     report.write(ctx.out / "audio_report.json")
     if not report.passed:
         raise ContentError(f"audio quality failed: {[c.name for c in report.failures()]}")
@@ -171,11 +226,13 @@ def stage_audio_check(ctx: Context) -> dict:
 
 
 def stage_visual_selection(ctx: Context) -> dict:
+    s = ctx.settings
     visuals = _ensure_fresh_concept(ctx)
+    visuals = with_prepared_loops(visuals, ffmpeg.require_binary("ffmpeg", s.ffmpeg_path), s.width, s.height, s.fps, s.cache_dir)
     sleep = ctx.recipe.subniches[0] == "sleep"
-    moving = ctx.settings.visual_motion is not VisualMotion.OFF
-    photos_only = all(v.type == "image" for v in visuals)
-    body, count = variant_plan_for(ctx.duration, SEGMENT_SECONDS, MAX_PHOTO_VARIANTS if photos_only else MAX_VARIANTS)
+    moving = s.visual_motion is not VisualMotion.OFF
+    one_scene_per_segment = all(v.type in ("image", "loop") for v in visuals)
+    body, count = variant_plan_for(ctx.duration, SEGMENT_SECONDS, MAX_PHOTO_VARIANTS if one_scene_per_segment else MAX_VARIANTS)
     variants = plan_variants(visuals, count, body, EDGE_S, ctx.seed, sleep, moving=moving)
     timeline = plan_timeline(ctx.duration, body, EDGE_S, count, ctx.seed, sleep)
     ctx.write_json("visual_plan.json", {"visuals": [asdict(v) for v in visuals], "body_s": body, "edge_s": EDGE_S,
@@ -216,11 +273,11 @@ def stage_render_video(ctx: Context) -> dict:
     s = ctx.settings
     binary = ffmpeg.require_binary("ffmpeg", s.ffmpeg_path)
     probe_bin = ffmpeg.require_binary("ffprobe", s.ffprobe_path)
-    encoder = ffmpeg.select_video_encoder(s.video_codec, s.use_gpu, ffmpeg.list_encoders(binary), lambda n: ffmpeg.encoder_works(binary, n, s.width, s.height))
     _data, variants, timeline = _load_plan(ctx)
+    codec = s.animated_video_codec if is_animated(variants) else s.video_codec
+    encoder = ffmpeg.select_video_encoder(codec, s.use_gpu, ffmpeg.list_encoders(binary), lambda n: ffmpeg.encoder_works(binary, n, s.width, s.height))
     still = is_still(variants)
-    bitrate = s.static_video_bitrate if still else s.video_bitrate
-    fmt = VideoFormat(s.width, s.height, s.fps, bitrate, s.audio_codec, s.audio_bitrate, still=still)
+    fmt = VideoFormat(s.width, s.height, s.fps, bitrate_for(variants, s), s.audio_codec, s.audio_bitrate, still=still)
     result = render_video(binary, probe_bin, variants, timeline, ctx.out / "audio.flac", ctx.duration, fmt, encoder, ctx.work / "video", ctx.out / "video.mp4", s.cache_dir)
     thumb, thumbs = generate_thumbnails(binary, result.path, result.duration, result.junctions_s, ctx.recipe, ctx.duration / 60, ctx.out / "thumbs")
     ctx.write_json("video_render.json", {"junctions_s": result.junctions_s, "timings": result.timings, "encoder": encoder.name,

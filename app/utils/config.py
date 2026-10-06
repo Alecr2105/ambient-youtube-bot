@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     video_bitrate: str = "5M"
     # A still picture needs a fraction of the bits of moving footage; used when nothing moves.
     static_video_bitrate: str = "800k"
+    #: Animated loops (rain, steam, a lamp): far less change than real footage, more than a photo.
+    animated_video_bitrate: str = "2500k"
     visual_motion: VisualMotion = VisualMotion.OFF
     visual_style: VisualStyle = VisualStyle.FOOTAGE
     use_gpu: GpuPolicy = GpuPolicy.AUTO
@@ -142,6 +144,28 @@ class Settings(BaseSettings):
     freesound_client_id: str | None = None
     freesound_token_path: Path | None = None
 
+    #: Lofi format: only recipes with a `music` block are produced, with music generated per video
+    #: by ACE-Step in a local ComfyUI. Off = the ambience-only recipes, as before.
+    music_mode: bool = False
+    comfyui_dir: Path = Path(r"C:\ai_tools\ComfyUI_windows_portable")
+    comfyui_url: str = "http://127.0.0.1:8188"
+    music_track_seconds: float = Field(180.0, ge=60, le=240)
+    music_crossfade_seconds: float = Field(4.0, ge=0.5, le=15)
+    #: For study: how far the loudest 3 s of the mix may rise above its usual level (music has beats).
+    music_max_short_term_jump_lu: float = Field(8.0, gt=0, le=20)
+    #: Animated scenes in H.265: about half the size of H.264 at the same quality (and upload time).
+    animated_video_codec: str = "h264"
+
+    #: 24/7 live stream server (Oracle Cloud VM). Empty host = no live stream.
+    oracle_host: str | None = None
+    oracle_user: str = "ubuntu"
+    oracle_key_path: Path | None = None
+    stream_root: str = "/home/ubuntu/stream"
+    #: Programmes (one per produced video) kept on the server and played in rotation.
+    stream_keep_programs: int = Field(7, ge=1, le=60)
+    #: Constant bitrate of the scene loop; YouTube flags 1080p streams under ~4.5 Mbps.
+    stream_video_bitrate: str = "4500k"
+
     max_retries: int = Field(3, ge=0, le=20)
     backoff_base: float = Field(60.0, gt=0)
 
@@ -165,6 +189,8 @@ class Settings(BaseSettings):
         "freesound_api_key",
         "freesound_client_id",
         "freesound_token_path",
+        "oracle_host",
+        "oracle_key_path",
         mode="before",
     )
     @classmethod
@@ -232,7 +258,7 @@ class Settings(BaseSettings):
             raise ValueError("FPS must be 24, 25, 30 or 60")
         return value
 
-    @field_validator("video_codec")
+    @field_validator("video_codec", "animated_video_codec")
     @classmethod
     def _codec(cls, value: str) -> str:
         value = value.lower()
@@ -277,7 +303,7 @@ class Settings(BaseSettings):
     def secrets_inside_repo(self) -> list[str]:
         """Names of secret paths that point inside the repository."""
         offenders = []
-        for name in ("youtube_client_secrets_path", "youtube_token_path", "freesound_token_path"):
+        for name in ("youtube_client_secrets_path", "youtube_token_path", "freesound_token_path", "oracle_key_path"):
             path: Path | None = getattr(self, name)
             if path is not None and path.resolve().is_relative_to(PROJECT_ROOT):
                 offenders.append(name)

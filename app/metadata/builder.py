@@ -63,16 +63,30 @@ def build_description(recipe: Recipe, minutes: float, filmed_in_costa_rica: bool
     ordered = sorted(recipe.subniches, key=lambda s: s != focus)  # the channel's main use first
     parts = [USES[s] for s in ordered]
     uses = parts[0] if len(parts) == 1 else "; ".join(parts[:-1]) + "; or " + parts[-1]
-    lines = [
-        f"{recipe.name} — {duration} of continuous ambience with no music and no talking.",
-        "",
-        f"Use it for {uses}. Let it play in the background, turn the screen off, and let the sound do the work.",
-    ]
-    if filmed_in_costa_rica:
-        lines += ["", f"{VISUAL_LINES[visual_style]} Every video is mixed individually, so no two are the same."]
+    if recipe.music is not None:
+        # Honest about how the music is made: by the channel, with an AI music model, for this video.
+        lines = [
+            f"{recipe.name} — {duration} of chill lofi music over soft, real rain. No talking.",
+            "",
+            f"Use it for {uses}. Put it on, start your timer, and let the beats and the rain keep you in the zone.",
+            "",
+            "Every track in this video is new: the channel composes it with an AI music model and mixes it over "
+            "real rain recordings, so no two videos sound the same.",
+        ]
+        if filmed_in_costa_rica:
+            lines += ["", VISUAL_LINES[visual_style]]
+        lines += ["", "If this helped you focus or unwind, subscribe for new lofi every day."]
     else:
-        lines += ["", "Every video is mixed individually, so no two are the same."]
-    lines += ["", "If this helped you sleep, study or unwind, subscribe for a new ambience every day."]
+        lines = [
+            f"{recipe.name} — {duration} of continuous ambience with no music and no talking.",
+            "",
+            f"Use it for {uses}. Let it play in the background, turn the screen off, and let the sound do the work.",
+        ]
+        if filmed_in_costa_rica:
+            lines += ["", f"{VISUAL_LINES[visual_style]} Every video is mixed individually, so no two are the same."]
+        else:
+            lines += ["", "Every video is mixed individually, so no two are the same."]
+        lines += ["", "If this helped you sleep, study or unwind, subscribe for a new ambience every day."]
     if attribution:
         lines += ["", attribution]
     hashtags = [f"#{w.replace(' ', '')}" for w in recipe.keywords[:3]]

@@ -1,9 +1,57 @@
 # ambient_youtube_bot
 
-Bot que produce, cada día y sin intervención, videos de ambiente sonoro de 3–4 h para el canal **Costa Rica Ambience**: elige el ambiente, investiga keywords en inglés, genera el audio, arma el video con tu footage, crea miniatura y metadata, pasa un quality gate y sube el video programado a YouTube.
+Bot que produce y publica **todos los días, sin intervención**, videos de 3–4 h de música lofi y ambiente para estudiar en el canal de YouTube **Costa Rica Ambience**. También alimenta un **directo 24/7** desde un servidor en la nube.
 
-- Especificación: `CLAUDE.md` · Análisis aprobado: `docs/ANALYSIS.md` · Auditoría de la API: `docs/YOUTUBE_AUDIT.md`
-- Todo lo que ve YouTube está en inglés. Todo el audio son grabaciones reales con licencia verificada (CC0 de Freesound o tuyas). El video usa solo tus archivos.
+## Resumen del proyecto
+
+**Qué hace, de punta a punta:**
+1. **Planifica:** elige receta, duración y hora de publicación.
+2. **Investiga keywords en inglés** con las sugerencias de búsqueda de YouTube.
+3. **Audio:** arma lluvia real a partir de grabaciones CC0 de Freesound con licencia verificada.
+4. **Música:** genera **temas lofi nuevos para cada video** con un modelo de IA local (ACE-Step, Apache-2.0) y los mezcla sobre la lluvia.
+5. **Video:** renderiza la escena ilustrada **animada en loop** (Wan 2.2) con la GPU.
+6. **Publicación:** crea miniatura y metadata, pasa un **quality gate** automático y sube y programa el video con la YouTube Data API. La API pasó la auditoría de cumplimiento de Google.
+7. **Directo:** manda cada video a una VM de Oracle Cloud que transmite 24/7 a YouTube Live.
+
+**Ingeniería destacada:**
+- **Pipeline como máquina de estados reanudable**, con estados en SQLite.
+  - Cada etapa deja un marcador; tras un corte de luz o un reinicio, retoma desde la última etapa válida.
+  - Errores de infraestructura: reintentos con backoff.
+  - Errores de contenido: se descartan sin reintentar.
+- **Quality gate de audio y video**, todo medido, nada a ojo:
+  - Audio: loudness BS.1770 (−18 LUFS, −1 dBTP), silencios, detección de loops por autocorrelación espectral, clics en empalmes, y "calma para estudiar" (picos de loudness de corto plazo).
+  - Video: cuadros negros y saltos visibles en empalmes.
+  - Duplicados de concepto.
+- **Procedencia y licencias:** cada sonido queda registrado con licencia, autor y URL.
+  - Se descartan grabaciones con voces, tráfico o texturas irregulares, con detectores propios.
+  - Cada tema generado guarda modelo, licencia, semilla y prompt.
+- **Video eficiente:**
+  - Cada variante se renderiza una sola vez con NVENC y el resto se ensambla por *stream copy*.
+  - Loops animados sin costura: fundido del inicio sobre el final, verificado con métricas por cuadro.
+  - H.265 para la mitad de peso.
+- **Directo 24/7 casi sin CPU:** el servidor gratuito solo reenvía paquetes ya codificados (FFmpeg `-c copy`, ~1 % de CPU) bajo `systemd`, con reinicio automático.
+- **IA local y gratuita:** ComfyUI se controla por su API HTTP y el bot lo arranca y apaga para liberar memoria antes del render.
+
+**Stack:**
+- Python 3.14, SQLAlchemy y Alembic (SQLite), APScheduler, FastAPI (panel de control) y pytest.
+- FFmpeg (NVENC), NumPy y SoundFile.
+- YouTube Data API v3 (OAuth2) y Freesound API v2 (OAuth2).
+- ComfyUI, ACE-Step y Wan 2.2.
+- Oracle Cloud (Ubuntu, systemd).
+- Windows Task Scheduler.
+
+**Resultados medidos:**
+- **Producción:** un video de 3,5 h sale en ~2 h en una laptop con RTX 4060.
+- **Música:** ~90 s de GPU por tema de 3 min.
+- **Archivo:** 3,1 GB en H.265.
+- **Tests:** 242 automatizados.
+
+---
+
+- Especificación original: `CLAUDE.md` · Análisis aprobado: `docs/ANALYSIS.md` · Formato lofi: `docs/LOFI.md` · Directo 24/7: `deploy/stream/README.md` · Auditoría de la API: `docs/YOUTUBE_AUDIT.md`
+- Todo lo que ve YouTube está en inglés.
+- El ambiente son grabaciones reales con licencia verificada (CC0 de Freesound o propias).
+- La música la genera el canal con un modelo de licencia Apache-2.0.
 
 ---
 
@@ -77,6 +125,7 @@ El ciclo diario:
 2. Retoma los videos a medias.
 3. Produce los que faltan (si una receta falla por contenido, prueba otra).
 4. En `MODE=production`, sube y programa los `READY` para `PUBLISH_HOUR` (hora del Este).
+5. Si `ORACLE_HOST` está configurado, manda los videos subidos al directo 24/7 (`python main.py stream-sync` lo hace a mano). Ver `deploy/stream/README.md`.
 
 **Si algo falla:**
 - Cada etapa deja un marcador y el pipeline retoma desde la última etapa válida.
@@ -93,7 +142,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_windows_task.ps1
 Start-ScheduledTask -TaskName "AmbientBot Worker"
 ```
 
-La tarea arranca al iniciar sesión, puede despertar el equipo y se reinicia si se cae. Dejá la laptop enchufada y con los temporizadores de reactivación permitidos. Para quitarla: `-Uninstall`.
+La tarea arranca al iniciar sesión y, si el worker no está corriendo (por ejemplo, al despertar de una suspensión), lo vuelve a lanzar en menos de 15 minutos. También puede despertar el equipo. Dejá la laptop enchufada y con los temporizadores de reactivación permitidos. Para quitarla: `-Uninstall`.
 
 ### Linux / Docker
 

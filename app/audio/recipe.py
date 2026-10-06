@@ -104,6 +104,13 @@ class Master(Strict):
     compressor_ratio: float = Field(1.5, ge=1)
 
 
+class Music(Strict):
+    """Lofi music generated for each video, played over the recipe's layers (then a quiet bed)."""
+
+    styles: list[str] = Field(default_factory=list, description="keys of app.music.lofi.STYLES; empty = all")
+    bed_below_lu: float = Field(15.0, ge=6, le=30, description="how far the ambience sits under the music")
+
+
 class Recipe(Strict):
     slug: str = Field(pattern=r"^[a-z0-9_]+$")
     name: str
@@ -117,6 +124,7 @@ class Recipe(Strict):
     events: list[Event] = []
     intensity: Intensity = Intensity()
     master: Master = Master()
+    music: Music | None = None
 
     @model_validator(mode="after")
     def _unique_names(self) -> Recipe:

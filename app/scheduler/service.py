@@ -55,7 +55,9 @@ def dates_needing_videos(settings: Settings, engine, today: date) -> list[date]:
     wanted = [d for d in horizon if d.weekday() in active_days]
     with session_scope(engine) as session:
         covered = {}
-        for video in session.scalars(select(Video).where(Video.target_publish_date.in_(wanted), Video.state.in_(ACTIVE_STATES + [VideoState.PUBLISHED]))):
+        # A test video (MODE=test, e.g. trying a new format) never stands in for a real day.
+        for video in session.scalars(select(Video).where(Video.target_publish_date.in_(wanted), Video.state.in_(ACTIVE_STATES + [VideoState.PUBLISHED]),
+                                                         Video.mode == settings.mode.value)):
             covered[video.target_publish_date] = covered.get(video.target_publish_date, 0) + 1
     return [d for d in wanted for _ in range(max(0, settings.videos_per_day - covered.get(d, 0)))]
 
@@ -212,6 +214,7 @@ def daily_cycle(settings: Settings, engine) -> None:
     for day in dates_needing_videos(settings, engine, today):
         produce_for_day(settings, engine, day)
         upload_ready_videos(settings, engine)
+    feed_live_stream(settings, engine)
     if settings.mode is Mode.PRODUCTION:
         try:
             from app.youtube.auth import build_service, load_credentials
@@ -223,12 +226,24 @@ def daily_cycle(settings: Settings, engine) -> None:
             log.warning("youtube status sync skipped: %s", exc)
 
 
+def feed_live_stream(settings: Settings, engine) -> None:
+    """Adds the new videos to the 24/7 live stream; never stops the daily cycle."""
+    from app.stream.sync import sync_stream
+
+    try:
+        sync_stream(settings, engine)
+    except Exception as exc:
+        log.error("live stream sync failed: %s", exc)
+
+
 def upload_ready_videos(settings: Settings, engine) -> None:
     """Uploads READY videos, earliest publish date first; stops at the first failure (quota, network)."""
     if settings.mode is not Mode.PRODUCTION:
         return
     with session_scope(engine) as session:
-        ready = [v.id for v in session.scalars(select(Video).where(Video.state == VideoState.READY).order_by(Video.target_publish_date))]
+        # Only videos produced in production mode: a test video is for review, never published by the worker.
+        ready = [v.id for v in session.scalars(select(Video).where(Video.state == VideoState.READY, Video.mode == Mode.PRODUCTION.value)
+                                                .order_by(Video.target_publish_date))]
     for video_id in ready:
         try:
             upload_ready(settings, engine, video_id)

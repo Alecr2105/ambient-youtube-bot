@@ -16,13 +16,22 @@ from app.quality.video import VideoThresholds, check_video
 from app.quality.report import QualityReport
 from app.utils import ffmpeg
 from app.utils.config import Settings, VisualMotion
-from app.video.plan import is_still, plan_timeline, plan_variants
+from app.video.plan import is_animated, is_still, plan_timeline, plan_variants
 from app.video.render import VideoFormat, render_video
+from app.visuals.loops import with_prepared_loops
 from app.visuals.matcher import choose_visuals, mark_used
 
 log = logging.getLogger(__name__)
 
 EDGE_S = 4.0
+
+
+def bitrate_for(variants: list, settings: Settings) -> str:
+    if is_still(variants):
+        return settings.static_video_bitrate
+    if is_animated(variants):
+        return settings.animated_video_bitrate
+    return settings.video_bitrate
 
 
 def variant_plan_for(duration: float, body_s: float, variants: int) -> tuple[float, int]:
@@ -49,28 +58,29 @@ def produce_video(
 
     binary = ffmpeg.require_binary("ffmpeg", settings.ffmpeg_path)
     probe_bin = ffmpeg.require_binary("ffprobe", settings.ffprobe_path)
-    encoder = ffmpeg.select_video_encoder(
-        settings.video_codec, settings.use_gpu, ffmpeg.list_encoders(binary),
-        lambda name: ffmpeg.encoder_works(binary, name, settings.width, settings.height),
-    )
     engine = make_engine(settings.database_url)
     with session_scope(engine) as session:
         visuals = choose_visuals(session, recipe.visual_tags)
+    visuals = with_prepared_loops(visuals, binary, settings.width, settings.height, settings.fps, settings.cache_dir)
     sleep = recipe.subniches[0] == "sleep"
     moving = settings.visual_motion is not VisualMotion.OFF
     body, variant_count = variant_plan_for(duration, body_s, variants)
     plan = plan_variants(visuals, variant_count, body, EDGE_S, seed, sleep, moving=moving)
     still = is_still(plan)
+    encoder = ffmpeg.select_video_encoder(
+        settings.animated_video_codec if is_animated(plan) else settings.video_codec, settings.use_gpu, ffmpeg.list_encoders(binary),
+        lambda name: ffmpeg.encoder_works(binary, name, settings.width, settings.height),
+    )
     timeline = plan_timeline(duration, body, EDGE_S, variant_count, seed, sleep)
     (out_dir / "visual_plan.json").write_text(
         json.dumps({"visuals": [asdict(v) for v in visuals], "timeline": timeline.order, "body_s": body, "edge_s": EDGE_S,
                     "variants": [asdict(v) for v in plan], "encoder": encoder.name}, indent=2),
         encoding="utf-8",
     )
-    bitrate = settings.static_video_bitrate if still else settings.video_bitrate
+    bitrate = bitrate_for(plan, settings)
     fmt = VideoFormat(settings.width, settings.height, settings.fps, bitrate, settings.audio_codec, settings.audio_bitrate, still=still)
     log.info("rendering %.0f s video: %d variants x %.0f s, %d timeline slots, encoder %s, %s at %s",
-             duration, variant_count, body, len(timeline.order), encoder.name, "still" if still else "moving", bitrate)
+             duration, variant_count, body, len(timeline.order), encoder.name, "still" if still else "animated" if is_animated(plan) else "moving", bitrate)
 
     started = time.perf_counter()
     result = render_video(binary, probe_bin, plan, timeline, audio, duration, fmt, encoder, settings.work_dir / f"video_{run_id}", out_dir / "video.mp4", settings.cache_dir)
