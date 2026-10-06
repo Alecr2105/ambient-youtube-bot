@@ -6,6 +6,8 @@
 #   tags:          lista de etiquetas en inglés
 #   allow_mirror:  true si el clip se puede espejar horizontalmente sin que se note (nada de texto, carteles ni volcanes reconocibles)
 #   exclude:       true para que el bot lo ignore
+#   loop:          true para un clip animado que se repite (por ejemplo, de Kling). Los clips de menos
+#                  de 30 s se toman como loop automáticamente; el bot arregla la costura solo.
 
 defaults:
   allow_mirror: false
@@ -21,5 +23,8 @@ files:
   volcan_arenal_atardecer.jpg:
     tags: [volcano, sunset, mountains]
     allow_mirror: false
+  cabana_lluvia_kling.mp4:
+    tags: [rain, window, storm]
+    loop: true
   prueba_mala.mp4:
     exclude: true

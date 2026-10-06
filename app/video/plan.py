@@ -21,6 +21,7 @@ class Piece:
     duration: float
     mirror: bool
     is_image: bool
+    loop: bool = False  # a short animated scene repeated for the whole piece
 
 
 @dataclass(frozen=True)
@@ -84,14 +85,14 @@ class Timeline:
 def _pieces_for(length: float, visuals: list[VisualChoice], rng: np.random.Generator, used: dict[str, list[tuple[float, float]]]) -> tuple[list[Piece], list[float]]:
     videos = [v for v in visuals if v.type == "video"]
     if not videos:
-        # One photo per segment, taken from the least used ones, so a video shows as many
-        # different pictures as it has segments before repeating any of them.
+        # One photo (or animated loop) per segment, taken from the least used ones, so a video
+        # shows as many different scenes as it has segments before repeating any of them.
         fewest = min(len(used.get(v.path, ())) for v in visuals)
         pool = [v for v in visuals if len(used.get(v.path, ())) == fewest]
-        image = pool[int(rng.integers(len(pool)))]
-        used.setdefault(image.path, []).append((0.0, length))
-        mirror = bool(image.allow_mirror and rng.random() < 0.3)
-        return [Piece(image.path, 0.0, length, mirror, True)], []
+        scene = pool[int(rng.integers(len(pool)))]
+        used.setdefault(scene.path, []).append((0.0, length))
+        mirror = bool(scene.allow_mirror and rng.random() < 0.3)
+        return [Piece(scene.path, 0.0, length, mirror, scene.type == "image", scene.type == "loop")], []
 
     pieces: list[Piece] = []
     fades: list[float] = []
@@ -158,6 +159,11 @@ def plan_variants(visuals: list[VisualChoice], count: int, body: float, edge: fl
             for i, v in enumerate(variants)
         ]
     return variants
+
+
+def is_animated(variants: list[SegmentVariant]) -> bool:
+    """True when every scene is an animated loop: little moves, so it needs less bitrate than footage."""
+    return bool(variants) and all(p.loop for v in variants for p in v.pieces)
 
 
 def is_still(variants: list[SegmentVariant]) -> bool:

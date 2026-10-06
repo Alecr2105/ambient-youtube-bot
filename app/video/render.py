@@ -112,6 +112,8 @@ def segment_command(ffmpeg: Path, variant: SegmentVariant, edge: float, fmt: Vid
     for piece in variant.pieces:
         if piece.is_image:
             cmd += ["-loop", "1", "-framerate", str(fmt.fps), "-t", f"{piece.duration:.3f}", "-i", piece.path]
+        elif piece.loop:
+            cmd += ["-stream_loop", "-1", "-t", f"{piece.duration:.3f}", "-i", piece.path]
         else:
             cmd += ["-ss", f"{piece.start:.3f}", "-t", f"{piece.duration:.3f}", "-i", piece.path]
     cmd += ["-loop", "1", "-framerate", str(fmt.fps), "-i", str(vignette)]

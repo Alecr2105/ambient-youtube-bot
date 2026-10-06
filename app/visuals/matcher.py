@@ -10,7 +10,7 @@ from app.database.models import Visual
 
 MAX_VISUALS = 3
 # Photos bring no movement of their own, so changing picture is the only variety a video has:
-# when there is no footage to cut, use more of them.
+# when there is no footage to cut, use more of them. Animated loops are used the same way.
 MAX_IMAGE_VISUALS = 8
 
 
@@ -38,6 +38,8 @@ def score_visual(visual: Visual, wanted: set[str], now: datetime) -> float:
     score = overlap * 10.0
     if visual.type == "video":
         score += 5.0
+    elif visual.type == "loop":
+        score += 3.0  # an animated scene beats the still picture it was made from
     score -= min(visual.usage_count, 20) * 0.25
     if visual.last_used_at is not None:
         last = visual.last_used_at if visual.last_used_at.tzinfo else visual.last_used_at.replace(tzinfo=UTC)
@@ -55,7 +57,12 @@ def choose_visuals(session: Session, visual_tags: list[str], now: datetime | Non
     if not matches:
         raise NoMatchingVisualsError(f"no indexed visual matches tags {sorted(wanted)}")
     videos = [(s, v) for s, v in matches if v.type == "video"]
-    picked = videos[: limit or MAX_VISUALS] if videos else matches[: limit or MAX_IMAGE_VISUALS]
+    loops = [(s, v) for s, v in matches if v.type == "loop"]
+    if videos:
+        picked = videos[: limit or MAX_VISUALS]
+    else:
+        # Loops and the photos they were animated from show the same scene: never mix them.
+        picked = (loops or matches)[: limit or MAX_IMAGE_VISUALS]
     return [
         VisualChoice(v.id, v.path, v.type, v.duration, v.width, v.height, v.allow_mirror, tuple(v.tags), s)
         for s, v in picked

@@ -42,6 +42,7 @@ class RecipeCoverage:
     video_seconds: float
     photos: int
     small_photos: tuple[str, ...]
+    loops: int = 0
 
     @property
     def ready(self) -> bool:
@@ -50,12 +51,16 @@ class RecipeCoverage:
 
     @property
     def thin(self) -> bool:
+        if self.loops >= COMFORTABLE_CLIPS:
+            return False  # animated scenes repeat by design; two of them already alternate
         return self.ready and (self.video_clips < COMFORTABLE_CLIPS or self.video_seconds < COMFORTABLE_SECONDS)
 
     def summary(self) -> str:
         parts = []
         if self.video_clips:
             parts.append(f"{self.video_clips} clip(s), {self.video_seconds / 60:.0f} min of video")
+        if self.loops:
+            parts.append(f"{self.loops} animated scene(s)")
         if self.photos:
             parts.append(f"{self.photos} photo(s)")
         return ", ".join(parts) or "nothing"
@@ -72,6 +77,7 @@ def recipe_coverage(session: Session, recipes: list[Recipe] | None = None) -> li
         covered = {t.lower() for v in matched for t in v.tags} & wanted
         videos = [v for v in matched if v.type == "video"]
         photos = [v for v in matched if v.type == "image"]
+        loops = [v for v in matched if v.type == "loop"]
         report.append(
             RecipeCoverage(
                 recipe=recipe,
@@ -81,7 +87,8 @@ def recipe_coverage(session: Session, recipes: list[Recipe] | None = None) -> li
                 video_clips=len(videos),
                 video_seconds=float(sum(v.duration or 0.0 for v in videos)),
                 photos=len(photos),
-                small_photos=tuple(v.path for v in photos if is_small(v)),
+                small_photos=tuple(v.path for v in photos + loops if is_small(v)),
+                loops=len(loops),
             )
         )
     return report

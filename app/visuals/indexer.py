@@ -22,6 +22,9 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 TAGS_FILE = "visuals.yaml"
 SAMPLE_BYTES = 8 * 1024 * 1024
 MIN_VIDEO_SECONDS = 30.0
+#: Shorter clips are animated scenes meant to repeat (e.g. made with Kling from one picture), not
+#: footage to cut from. Anything under a couple of seconds cannot hold a seamless loop.
+MIN_LOOP_SECONDS = 2.0
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,7 @@ class VisualOptions:
     tags: list[str]
     allow_mirror: bool = False
     exclude: bool = False
+    loop: bool = False
 
 
 @dataclass
@@ -69,6 +73,7 @@ def load_options(root: Path) -> dict[str, VisualOptions]:
             tags=sorted({str(t).lower() for t in entry.get("tags", [])}),
             allow_mirror=bool(entry.get("allow_mirror", False)),
             exclude=bool(entry.get("exclude", False)),
+            loop=bool(entry.get("loop", False)),
         )
     return options
 
@@ -92,9 +97,11 @@ def index_visuals(session: Session, root: Path, ffprobe: Path) -> IndexReport:
             report.skipped[relative] = f"probe failed: {exc}"
             continue
         kind = "image" if suffix in IMAGE_EXTENSIONS else "video"
-        if kind == "video" and (info.duration or 0) < MIN_VIDEO_SECONDS:
-            report.skipped[relative] = f"shorter than {MIN_VIDEO_SECONDS:.0f} s"
-            continue
+        if kind == "video" and (option.loop or (info.duration or 0) < MIN_VIDEO_SECONDS):
+            kind = "loop"
+            if (info.duration or 0) < MIN_LOOP_SECONDS:
+                report.skipped[relative] = f"shorter than {MIN_LOOP_SECONDS:.0f} s, too short to loop"
+                continue
         if not option.tags:
             report.skipped[relative] = "no tags (add it to visuals.yaml or use descriptive file names)"
             continue

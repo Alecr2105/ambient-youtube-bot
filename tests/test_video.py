@@ -124,23 +124,30 @@ def engine(make_settings):
 
 
 @needs_ffmpeg
-def test_indexer_uses_yaml_tags_skips_short_and_marks_missing(engine, tmp_path):
+def test_indexer_uses_yaml_tags_indexes_short_clips_as_loops_and_marks_missing(engine, tmp_path):
     root = tmp_path / "visuals"
     make_clip(root / "rain_window.mp4", 35)
     make_clip(root / "clip0001.mp4", 35)
     make_clip(root / "short_rain.mp4", 5)
-    (root / "visuals.yaml").write_text("files:\n  clip0001.mp4: {tags: [River, Jungle], allow_mirror: true}\n", encoding="utf-8")
+    make_clip(root / "blink_rain.mp4", 1)
+    make_clip(root / "long_rain_loop.mp4", 35)
+    (root / "visuals.yaml").write_text(
+        "files:\n  clip0001.mp4: {tags: [River, Jungle], allow_mirror: true}\n  long_rain_loop.mp4: {tags: [rain], loop: true}\n",
+        encoding="utf-8",
+    )
     with session_scope(engine) as session:
         report = index_visuals(session, root, FFPROBE)
-    assert sorted(report.added) == ["clip0001.mp4", "rain_window.mp4"]
-    assert "short_rain.mp4" in report.skipped
+    assert sorted(report.added) == ["clip0001.mp4", "long_rain_loop.mp4", "rain_window.mp4", "short_rain.mp4"]
+    assert "blink_rain.mp4" in report.skipped  # too short to loop
     with session_scope(engine) as session:
+        kinds = {Path(v.path).name: v.type for v in session.query(Visual)}
+        assert kinds == {"clip0001.mp4": "video", "long_rain_loop.mp4": "loop", "rain_window.mp4": "video", "short_rain.mp4": "loop"}
         river = next(v for v in session.query(Visual) if v.path.endswith("clip0001.mp4"))
         assert river.tags == ["jungle", "river"] and river.allow_mirror and river.duration == pytest.approx(35, abs=0.2)
     (root / "rain_window.mp4").unlink()
     with session_scope(engine) as session:
         report = index_visuals(session, root, FFPROBE)
-    assert len(report.missing) == 1
+    assert [Path(p).name for p in report.missing] == ["rain_window.mp4"]
 
 
 def test_matcher_prefers_tag_overlap_and_rests_recent_clips(engine):
